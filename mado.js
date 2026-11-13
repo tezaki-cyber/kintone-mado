@@ -13,11 +13,12 @@
 (function () {
   'use strict';
   if (window.BCR_MADO) return;                 // 二重に登録されても1回だけ動く
-  var VERSION = '2026-11-13.1';                // 機能を更新したら変える(古い読み置きを使わせないため)
+  var VERSION = '2026-11-13.2';                // 機能を更新したら変える(古い読み置きを使わせないため)
 
   // 機能の一覧。apps=動かすアプリ番号 / events=動かす画面 / views=一覧の名前(一覧の画面のときだけ見る。空ならどの一覧でも)
   var FEATURES = [
-    { id: 'fukushizai', on: true, apps: [852], events: ['app.record.index.show'], views: ['副資材・カートン'], src: 'features/fukushizai.js' }
+    { id: 'fukushizai', on: true, apps: [867], events: ['app.record.index.show'], views: [], src: 'features/fukushizai.js' },                     // 進捗表:表の道具列「カートンを作る」から開く
+    { id: 'fukushizai', on: true, apps: [852], events: ['app.record.index.show'], views: ['副資材・カートン'], src: 'features/fukushizai.js' }   // 商品管理表(使わなくなる予定)
   ];
 
   var CONFIG = window.BCR_MADO_CONFIG || {};

@@ -1,9 +1,9 @@
 /*
- * 副資材・カートンの自動生成(キントーン BCR_商品管理表 用)
+ * 副資材・カートンの自動生成(キントーン BCR_進捗表・BCR_商品管理表 用)
  *
  * 一覧「副資材・カートン」を開いたときだけ、上に「副資材・カートンを作る」ボタンを1つ出す。ほかの一覧・画面では何もしない。
  * 作る種類・履歴・製造先と原産国の対応表は、すべてこのボタンのポップアップの中に置く(キントーンのメニューを増やさない)。
- * 商品管理表・JANマスター・製造先マスタは「読むだけ」。キントーンには何も書き込まない。
+ * 進捗表(商品管理表)・JANマスター・製造先マスタは「読むだけ」。キントーンには何も書き込まない。
  *
  * 流れ: 0 商品を選ぶ → 1 中身を確かめる → 2 できあがりを見る(下書き) → 3 確定
  * 生成はサーバー(CONFIG.api)がする。JAN のずれ検知とバーコードの読み直し確認もサーバー側。
@@ -18,16 +18,34 @@
     appMaster: 855,             // BCR_JAN/プライズコード(JANマスター)
     appSeizo: 854               // BCR_製造先マスタ
   }, MADO && MADO.config.fukushizai || {}, window.FUKU_CONFIG || {});
-  var F = { name: '商品名', jan: 'JANコード', price: '税込価格', cat: '商品カテゴリ', seizo: '製造先', box: 'BOX入数', carton: 'カートン入数', hanro: '販路' };
+  // 読む項目はアプリごとに違う。進捗表(867)は税込価格・入数の項目がないので、価格は JANマスターから、入数は計算か部決表から入る。
+  // 進捗表のスプレッドシート由来の行は「シート_」の項目に入っているので、空のときはそちらを見る(alt)。
+  var APP = 0; try { APP = kintone.app.getId(); } catch (e) { /* 単体の試験 */ }
+  var SOURCES = {
+    852: { label: '商品管理表', f: { name: '商品名', jan: 'JANコード', price: '税込価格', cat: '商品カテゴリ', seizo: '製造先', box: 'BOX入数', carton: 'カートン入数', hanro: '販路' }, alt: {}, base: '' },
+    867: { label: '進捗表', f: { name: '商品名', jan: 'JANコード', price: '', cat: '商品カテゴリ', seizo: '製造工場', box: '', carton: '', hanro: '販路' },
+           alt: { name: 'シート_商品名', jan: 'シート_JAN', price: 'シート_税込', seizo: 'シート_製造先', box: 'シート_BOX入数', carton: 'シート_入り数', hanro: 'シート_販路' }, base: '商品名 != ""' }
+  };
+  var SRC = SOURCES[APP] || SOURCES[852];
+  var F = SRC.f;
   var KIND = { carton: 'カートンマーク', sticker: 'JANシール(副資材)' };
   var NUM = { perBag: 1, bags: 1 };
 
-  var root, products = [], items = [], master = {}, countries = [], kinds = {}, step = 0, draft = null, pickFilter = '', picked = {}, seizoNames = null;
+  var root, products = [], items = [], master = {}, countries = [], kinds = {}, step = 0, draft = null, pickFilter = '', picked = {}, seizoNames = null, skipped = 0;
 
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var $ = function (s) { return root.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(root.querySelectorAll(s)); };
-  var val = function (rec, code) { return rec[code] && rec[code].value != null ? String(rec[code].value) : ''; };
+  var val = function (rec, code) { return code && rec[code] && rec[code].value != null ? String(rec[code].value) : ''; };
+  var READ = ['$id'].concat(Object.keys(SRC.f).map(function (k) { return SRC.f[k]; }), Object.keys(SRC.alt).map(function (k) { return SRC.alt[k]; })).filter(Boolean);
+  var digits = function (v) { return String(v).normalize('NFKC').replace(/[^0-9.]/g, ''); };   // 「¥1,650」→ 1650
+  function toProduct(r) {
+    var pick = function (k) { return val(r, SRC.f[k]).trim() || val(r, SRC.alt[k]).trim(); };
+    var sheet = !val(r, SRC.f.name).trim() && !!val(r, SRC.alt.name).trim();   // スプレッドシート由来の行
+    return { id: +r.$id.value, name: pick('name'), jan: pick('jan').normalize('NFKC').replace(/[^0-9]/g, ''), priceIn: digits(pick('price')), category: val(r, F.cat),
+             seizo: pick('seizo').normalize('NFKC'), box: digits(pick('box')), carton: /^[0-9,]+$/.test(pick('carton').normalize('NFKC')) ? digits(pick('carton')) : '',
+             hanro: pick('hanro') || (sheet ? '一般' : '') };
+  }
   var isInt = function (v) { v = String(v).trim().normalize('NFKC'); return /^[0-9]+$/.test(v) && +v > 0; };
   var chunk = function (a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
 
@@ -52,7 +70,7 @@
 
   // ---------- 見た目(このポップアップの中だけに効く) ----------
   var CSS = [
-    '#fk-root{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;z-index:10000;font-family:"Meiryo","Hiragino Kaku Gothic ProN",sans-serif;color:#333;font-size:14px;line-height:1.5}',
+    '#fk-root{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;z-index:100001;font-family:"Meiryo","Hiragino Kaku Gothic ProN",sans-serif;color:#333;font-size:14px;line-height:1.5}',
     '#fk-root.on{display:flex}',
     '#fk-root *{box-sizing:border-box}',
     '#fk-root .pop{background:#fff;width:min(980px,100%);border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.3)}',
@@ -155,20 +173,29 @@
   function fail(e) { msg('うまくいきませんでした：' + (e && e.message ? e.message : e), 'bad'); $('.go').disabled = false; }
 
   // ---------- 0 商品を選ぶ ----------
-  function open() {
-    build(); root.classList.add('on'); setStep(0); picked = {}; pickFilter = '';
-    $('.body').innerHTML = '<div class="wait">商品管理表を読んでいます…</div>'; msg(''); $('.go').disabled = true;
-    var cond = ''; try { cond = kintone.app.getQueryCondition() || ''; } catch (e) { /* 条件なしで読む */ }
-    kget(kintone.app.getId(), (cond ? cond + ' ' : '') + 'order by $id desc', ['$id', F.name, F.jan, F.price, F.cat, F.seizo, F.box, F.carton, F.hanro])
-      .then(function (recs) {
-        products = recs.map(function (r) {
-          return { id: +r.$id.value, name: val(r, F.name), jan: val(r, F.jan), priceIn: val(r, F.price), category: val(r, F.cat),
-                   seizo: val(r, F.seizo), box: val(r, F.box), carton: val(r, F.carton), hanro: val(r, F.hanro) };
-        });
-        // JAN のある商品(=作れる商品)を上に。それぞれの中は新しい順のまま
-        products = products.filter(function (p) { return p.jan; }).concat(products.filter(function (p) { return !p.jan; }));
-        renderPick();
-      }).catch(fail);
+  // ids を渡すと(進捗表で行を選んでから押したとき)、商品選びを飛ばして、その商品の中身の確認から始める
+  function open(ids) {
+    ids = (Array.isArray(ids) ? ids : []).map(Number).filter(function (n) { return n > 0; });
+    build(); root.classList.add('on'); setStep(0); picked = {}; pickFilter = ''; skipped = 0;
+    $('.body').innerHTML = '<div class="wait">' + SRC.label + 'を読んでいます…</div>'; msg(''); $('.go').disabled = true;
+    var cond = SRC.base; if (!cond) { try { cond = kintone.app.getQueryCondition() || ''; } catch (e) { /* 条件なしで読む */ } }
+    var load = ids.length
+      ? Promise.all(chunk(ids, 100).map(function (part) { return kget(APP, '$id in (' + part.join(',') + ')', READ); })).then(function (pages) { return [].concat.apply([], pages); })
+      : kget(APP, (cond ? cond + ' ' : '') + 'order by $id desc', READ);
+    load.then(function (recs) {
+      products = recs.map(toProduct);
+      // JAN のある商品(=作れる商品)を上に。それぞれの中は新しい順のまま
+      products = products.filter(function (p) { return p.jan; }).concat(products.filter(function (p) { return !p.jan; }));
+      if (!ids.length) return renderPick();
+      var ok = products.filter(function (p) { return p.jan; });
+      if (ok.length && ok.length <= 50) {   // 選んだ行に JAN があれば、そのまま中身の確認へ
+        ok.forEach(function (p) { picked[p.id] = 1; });
+        skipped = products.length - ok.length;
+        return prepare();
+      }
+      renderPick();
+      msg(ok.length ? '一度に作れるのは 50 商品までです。作る商品を選び直してください' : '選んだ行には JAN の入った商品がありません', 'bad');
+    }).catch(fail);
   }
   function renderPick() {
     $('.body').innerHTML = '<input class="find" placeholder="商品名・JAN でさがす" value="' + esc(pickFilter) + '">' +
@@ -213,7 +240,7 @@
         (master[j] = master[j] || []).push({ id: r.$id.value, name: val(r, '商品名'), priceIn: val(r, '税込価格'), note: val(r, '備考') });
       });
     });
-    var pDup = Promise.all(chunk(jans, 100).map(function (part) { return kget(kintone.app.getId(), inq(F.jan, part), ['$id', F.jan]); }))
+    var pDup = Promise.all(chunk(jans, 100).map(function (part) { return kget(APP, inq(F.jan, part), ['$id', F.jan]); }))
       .then(function (pages) {
         var c = {}; [].concat.apply([], pages).forEach(function (r) { var j = val(r, F.jan); c[j] = (c[j] || 0) + 1; });
         sel.forEach(function (p) { p.dup = c[p.jan] || 1; });
@@ -222,12 +249,16 @@
       seizoNames = rs.map(function (r) { return val(r, '製造先名'); });
     }).catch(function () { seizoNames = []; });   // 製造先マスタが読めない人でも作れる(原産国は選んでもらう形になる)
     Promise.all([pMaster, pDup, pSeizo]).then(function () {
-      return call('prepare', { products: sel, master: master, seizoNames: seizoNames });
+      if (!F.price) sel.forEach(function (p) {   // 価格の項目がないアプリ(進捗表)は、JANマスターの価格を使う
+        if (!p.priceIn && master[p.jan] && master[p.jan].length === 1) p.priceIn = master[p.jan][0].priceIn;
+      });
+      return call('prepare', { products: sel, master: master, seizoNames: seizoNames, sourceName: SRC.label });
     }).then(function (r) {
       countries = r.countries; items = r.items;
       items.forEach(function (it) { it.guardOk = false; it.open = false; });
       kinds = { carton: 1 };
       setStep(1); render();
+      if (skipped) { msg('選んだ行のうち、JAN のない ' + skipped + ' 件は外しました'); skipped = 0; }
     }).catch(fail);
   }
 
@@ -300,7 +331,7 @@
       var f = d[2], attr = 'data-k="' + d[0] + '" data-j="' + d[1] + '"';
       return '<label class="' + (f[4] ? 'req' : '') + '">' + esc(f[1]) + '</label>' +
         (f[0] === 'template' ? '<select ' + attr + '><option value="capsule" ' + (f[2] === 'capsule' ? 'selected' : '') + '>カプセルトイ</option><option value="general" ' + (f[2] === 'general' ? 'selected' : '') + '>一般MD</option></select>'
-          : '<input ' + attr + ' value="' + esc(f[2]) + '" ' + (f[6] ? 'readonly title="JAN はここでは書き換えられません。商品管理表を直してください"' : '') + '>') +
+          : '<input ' + attr + ' value="' + esc(f[2]) + '" ' + (f[6] ? 'readonly title="JAN はここでは書き換えられません。' + SRC.label + 'を直してください"' : '') + '>') +
         '<span class="src">' + esc(f[3]) + (f[6] ? '・書き換え不可' : '') + '</span>';
     }).join('') + '</div></details>';
     return h + '</div>';
@@ -310,7 +341,7 @@
     var m = g.master ? '<div class="m">JANマスター：' + esc(g.master.name) + '／' + esc(g.master.priceIn) + '円</div>' : '';
     if (g.level === 'ok') return '<div class="line okline">✓ JAN ' + esc(it.product.jan) + ' は JANマスターと一致(商品名・税込価格も)</div>';
     if (g.level === 'stop') return '<div class="guard stop"><b>✕ JAN のずれを見つけたので、この商品は作りません</b><br>' + g.stop.map(esc).join('<br>') + m +
-      '<div class="m">商品管理表かJANマスターを直してから、もう一度開いてください。ほかの商品はこのまま作れます。</div></div>';
+      '<div class="m">' + SRC.label + 'かJANマスターを直してから、もう一度開いてください。ほかの商品はこのまま作れます。</div></div>';
     return '<div class="guard warn ' + (it.guardOk ? 'done' : '') + '"><b>⚠ 確かめてください</b><br>' + g.warn.map(esc).join('<br>') + m +
       '<label><input type="checkbox" class="gchk" ' + (it.guardOk ? 'checked' : '') + '> 見比べて、同じ商品だと確かめました</label></div>';
   }
@@ -382,7 +413,7 @@
     if (step === 1) {
       $('.go').disabled = true; msg('下書きを作って、バーコードを読み直しています…');
       var send = items.filter(function (it) { return status(it) === 'ready'; });
-      return call('generate', { kinds: Object.keys(kinds), items: send, master: master }).then(function (r) {
+      return call('generate', { kinds: Object.keys(kinds), items: send, master: master, sourceName: SRC.label }).then(function (r) {
         draft = r; setStep(2);
         var ok = r.results.filter(function (x) { return x.ok; }), ng = r.results.length - ok.length;
         $('.body').innerHTML = '<div class="res">' + r.results.map(function (x) {
@@ -409,8 +440,9 @@
   }
 
   // ---------- 入口:一覧「副資材・カートン」のときだけボタンを出す ----------
+  window.BCR_FUKU = { open: open };   // 進捗表の表(別の枠の中)から呼ぶ入口: parent.BCR_FUKU.open([レコード番号…])
   function onIndex(ev) {
-    if (ev.viewName !== CONFIG.view) return ev;
+    if (APP !== 852 || ev.viewName !== CONFIG.view) return ev;   // ボタンを足すのは商品管理表の専用一覧だけ。進捗表は表の道具列のボタンから開く
     if (document.querySelector('.fk-open')) return ev;   // 古い登録(ファイル版)が残っていても、ボタンは1つだけ
     var b = document.createElement('button'); b.className = 'fk-open'; b.type = 'button'; b.textContent = '副資材・カートンを作る';
     b.onclick = open;
