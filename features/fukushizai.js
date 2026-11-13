@@ -143,6 +143,8 @@
     '#fk-root .res ul{margin:4px 0 6px;padding-left:0;list-style:none;font-size:12px;line-height:1.7}',
     '#fk-root .res li::before{content:"✓ ";color:#27ae60;font-weight:bold}',
     '#fk-root .res li.w::before{content:""}#fk-root .res li.w{color:#8a5f00}',
+    '#fk-root .saveall{margin-top:8px;padding:8px 16px;border:0;border-radius:6px;background:#3498db;color:#fff;font-size:14px;font-weight:bold;cursor:pointer}',
+    '#fk-root .savehint{color:#888;font-size:12px}',
     '#fk-root .after{margin-top:14px;padding:12px;background:#f7f9fa;border-radius:6px;font-size:13px;line-height:1.8}',
     '#fk-root .wait{padding:40px;text-align:center;color:#888}',
     '.fk-open{background:#2a8fd6;color:#fff;border:1px solid #2a8fd6;border-radius:4px;padding:0 16px;height:40px;font-size:14px;font-weight:bold;cursor:pointer;margin-left:8px}'
@@ -432,11 +434,42 @@
       var ok = draft.results.filter(function (x) { return x.ok; });
       return call('finalize', { folder: draft.folder, results: ok.map(function (x) { return { id: x.id, kind: x.kind, name: x.name }; }) }).then(function (r) {
         setStep(3);
-        $('.body').insertAdjacentHTML('beforeend', '<div class="after">✓ ' + r.count + '件を確定しました(' + esc(r.at) + ')。作成の記録を残しました。<br>上の「PDF を開く」「AI を保存」からファイルを受け取ってください。</div>');
+        $('.body').insertAdjacentHTML('beforeend', '<div class="after">✓ ' + r.count + '件を確定しました(' + esc(r.at) + ')。作成の記録を残しました。<br><button type="button" class="saveall">まとめてフォルダに保存</button> <span class="savehint">保存先のフォルダを選ぶと、PDF と AI を全部まとめて入れます。1つずつ受け取るときは、上の「PDF を開く」「AI を保存」から。</span></div>');
+        $('.saveall').onclick = saveAll;
         msg('確定しました', 'good');
         $('.body').scrollTop = $('.body').scrollHeight;
       }).catch(fail);
     }
+  }
+
+  // ---------- まとめてフォルダに保存(確定のあと) ----------
+  // 保存先はその場で選ぶ(共有ドライブのフォルダも選べる)。同じ名前のファイルがあるときは、上書きの前に必ず聞く。
+  function saveAll() {
+    if (!window.showDirectoryPicker) return msg('このブラウザではフォルダを選んで保存できません。Chrome か Edge で開いてください', 'bad');
+    var files = [];
+    draft.results.filter(function (x) { return x.ok; }).forEach(function (x) {
+      files.push({ name: x.name + '.pdf', url: x.pdf }); files.push({ name: x.name + '.ai', url: x.ai });
+    });
+    var dir;
+    window.showDirectoryPicker({ id: 'bcr-fukushizai', mode: 'readwrite' }).then(function (d) {
+      dir = d; msg('保存しています…');
+      return Promise.all(files.map(function (f) { return dir.getFileHandle(f.name).then(function () { return f.name; }, function () { return null; }); }));
+    }).then(function (exist) {
+      exist = exist.filter(Boolean);
+      if (exist.length && !window.confirm('このフォルダには、同じ名前のファイルが ' + exist.length + ' 個あります。上書きしますか?\n\n' + exist.slice(0, 6).join('\n') + (exist.length > 6 ? '\nほか' : ''))) return 0;
+      return files.reduce(function (p, f) {
+        return p.then(function () {
+          return fetch(f.url).then(function (r) { if (!r.ok) throw new Error(f.name + ' を取り出せませんでした'); return r.blob(); }).then(function (b) {
+            return dir.getFileHandle(f.name, { create: true }).then(function (h) { return h.createWritable(); }).then(function (w) { return w.write(b).then(function () { return w.close(); }); });
+          });
+        });
+      }, Promise.resolve()).then(function () { return files.length; });
+    }).then(function (n) {
+      if (n) msg('フォルダ「' + dir.name + '」に ' + n + ' 個のファイルを保存しました', 'good'); else msg('保存をやめました');
+    }).catch(function (e) {
+      if (e && e.name === 'AbortError') return msg('保存をやめました');
+      msg('保存できませんでした：' + (e && e.message ? e.message : e), 'bad');
+    });
   }
 
   // ---------- 入口:一覧「副資材・カートン」のときだけボタンを出す ----------
