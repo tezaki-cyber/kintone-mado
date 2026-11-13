@@ -28,7 +28,7 @@
   };
   var SRC = SOURCES[APP] || SOURCES[852];
   var F = SRC.f;
-  var KIND = { carton: 'カートンマーク', sticker: 'JANシール(副資材)' };
+  var KIND = { carton: 'カートンマーク', sticker: '副資材(裏貼りシール)' };
   var NUM = { perBag: 1, bags: 1 };
 
   var root, products = [], items = [], master = {}, countries = [], kinds = {}, step = 0, draft = null, pickFilter = '', picked = {}, seizoNames = null, skipped = 0;
@@ -119,6 +119,7 @@
     '#fk-root .need .f{display:flex;flex-direction:column;gap:3px}',
     '#fk-root .need .f>span{font-size:12px;color:#555}',
     '#fk-root .need input{width:90px;font:inherit;padding:6px 8px;border:1px solid #cfd5d8;border-radius:3px}',
+    '#fk-root .need .f.wide input{width:280px}',
     '#fk-root .need select{font:inherit;padding:6px 8px;border:1px solid #cfd5d8;border-radius:3px}',
     '#fk-root .total{font-size:13px;padding-bottom:7px;color:#1b6fa8;font-weight:bold;min-width:110px}',
     '#fk-root .bad{border-color:#e74c3c !important;background:#fff6f5}',
@@ -292,14 +293,14 @@
         return '<span class="kchip ' + (kinds[k] ? 'on' : '') + ' ' + (avail(k) ? '' : 'off') + '" data-k="' + k + '">' + (kinds[k] ? '✓ ' : '') + KIND[k] +
           (avail(k) ? '' : ' <small>(選んだ商品の型がまだありません)</small>') + '</span>';
       }).join('') + '</div>' +
-      (multi ? '<div class="bulk">入り数をまとめて入れる： 1袋 <input class="bper" inputmode="numeric"> 個 × <input class="bbags" inputmode="numeric"> 袋 ' +
+      (multi && kinds.carton ? '<div class="bulk">入り数をまとめて入れる： 1袋 <input class="bper" inputmode="numeric"> 個 × <input class="bbags" inputmode="numeric"> 袋 ' +
         '<button class="small bfill">空いている所に入れる</button><span style="color:#888;font-size:12px">(すでに入っている商品は変えません)</span></div>' : '') +
       items.map(cardHtml).join('') +
       '<details class="tbl"><summary>製造先と原産国の対応表を見る・直す</summary><div class="tblbody">読み込み中…</div></details>';
     $$('.kchip').forEach(function (c) {
       c.onclick = function () { var k = c.dataset.k; if (!avail(k)) return; if (kinds[k] && Object.keys(kinds).length > 1) delete kinds[k]; else kinds[k] = 1; render(); };
     });
-    if (multi) $('.bfill').onclick = function () {
+    if (multi && kinds.carton) $('.bfill').onclick = function () {
       var per = $('.bper').value.trim(), bags = $('.bbags').value.trim();
       items.forEach(function (it) {
         it.kinds.carton.fields.forEach(function (f) {
@@ -320,19 +321,26 @@
     var h = '<div class="card ' + st + '" data-i="' + i + '"><div class="ttl"><b>' + esc(it.productName) + '</b><span class="chip">' + esc(it.category) + '</span><span class="state"></span>' +
       (items.length > 1 ? '<button class="rm" title="この商品を今回の作成から外します">今回は外す</button>' : '') + '</div>' + guardHtml(it);
     if (st === 'stopped') return h + '</div>';
-    if (hist.length) h += '<div class="line hist">⚠ ' + hist.map(function (x) { return (x.kind === 'carton' ? 'カートン' : 'JANシール') + 'は ' + esc(x.at) + ' に' + (x.by ? esc(x.by) + 'さんが' : '') + '作成済み'; }).join('／') + '。作り直すと新しい版として残ります。</div>';
+    if (hist.length) h += '<div class="line hist">⚠ ' + hist.map(function (x) { return (x.kind === 'carton' ? 'カートン' : '副資材シール') + 'は ' + esc(x.at) + ' に' + (x.by ? esc(x.by) + 'さんが' : '') + '作成済み'; }).join('／') + '。作り直すと新しい版として残ります。</div>';
     if (!ak.length) return h + '</div>';
     var per = main.filter(function (m) { return m[2][0] === 'perBag'; })[0];
-    h += '<div class="need">' + main.map(function (m) {
-      return '<div class="f"><span>' + esc(m[2][1]) + '</span><input data-k="' + m[0] + '" data-j="' + m[1] + '" value="' + esc(m[2][2]) + '" inputmode="numeric"></div>';
-    }).join('') + (per ? '<div class="total"></div><div class="f"><span>&nbsp;</span><span class="src" style="margin:0 0 6px">' + esc(per[2][3]) + '</span></div>' : '') +
+    var opts = function (f, attr) {   // 選ぶ形の項目(8番目に [値, 見出し] の並び)
+      return '<select ' + attr + '>' + f[7].map(function (o) { return '<option value="' + esc(o[0]) + '" ' + (String(f[2]) === o[0] ? 'selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
+    };
+    var mainHtml = function (m) {
+      var f = m[2], attr = 'data-k="' + m[0] + '" data-j="' + m[1] + '"';
+      return '<div class="f' + (NUM[f[0]] ? '' : ' wide') + '"><span>' + esc(f[1]) + '</span>' + (f[7] ? opts(f, attr) : '<input ' + attr + ' value="' + esc(f[2]) + '" ' + (NUM[f[0]] ? 'inputmode="numeric"' : 'title="' + esc(f[3]) + '"') + '>') + '</div>';
+    };
+    // カートンの入力(個数)→合計→副資材の入力、の順に並べる
+    h += '<div class="need">' + main.filter(function (m) { return m[0] === 'carton'; }).map(mainHtml).join('') + (per ? '<div class="total"></div><div class="f"><span>&nbsp;</span><span class="src" style="margin:0 0 6px">' + esc(per[2][3]) + '</span></div>' : '') +
+      main.filter(function (m) { return m[0] !== 'carton'; }).map(mainHtml).join('') +
       '<div class="f"><span>原産国</span><div class="mi ' + it.madeIn.state + '"><select class="misel"><option value="">選んでください</option>' +
       countries.map(function (c) { return '<option ' + (it.madeIn.value === c ? 'selected' : '') + '>' + c + '</option>'; }).join('') + '</select><span class="why">' + esc(it.madeIn.why) + '</span>' +
       (it.madeIn.state === 'predicted' ? '<button class="small miok">' + esc(it.madeIn.value) + ' で合っている</button>' : '') + '</div></div></div>';
     h += '<details class="det" ' + (it.open ? 'open' : '') + '><summary>自動で入った内容(' + detail.length + '項目)を見る・直す</summary><div class="grid">' + detail.map(function (d) {
       var f = d[2], attr = 'data-k="' + d[0] + '" data-j="' + d[1] + '"';
       return '<label class="' + (f[4] ? 'req' : '') + '">' + esc(f[1]) + '</label>' +
-        (f[0] === 'template' ? '<select ' + attr + '><option value="capsule" ' + (f[2] === 'capsule' ? 'selected' : '') + '>カプセルトイ</option><option value="general" ' + (f[2] === 'general' ? 'selected' : '') + '>一般MD</option></select>'
+        (f[7] ? opts(f, attr) : f[0] === 'template' ? '<select ' + attr + '><option value="capsule" ' + (f[2] === 'capsule' ? 'selected' : '') + '>カプセルトイ</option><option value="general" ' + (f[2] === 'general' ? 'selected' : '') + '>一般MD</option></select>'
           : '<input ' + attr + ' value="' + esc(f[2]) + '" ' + (f[6] ? 'readonly title="JAN はここでは書き換えられません。' + SRC.label + 'を直してください"' : '') + '>') +
         '<span class="src">' + esc(f[3]) + (f[6] ? '・書き換え不可' : '') + '</span>';
     }).join('') + '</div></details>';
@@ -420,9 +428,9 @@
         var ok = r.results.filter(function (x) { return x.ok; }), ng = r.results.length - ok.length;
         $('.body').innerHTML = '<div class="res">' + r.results.map(function (x) {
           var it = items.filter(function (i) { return i.id === x.id; })[0] || { productName: '' };
-          return x.ok ? '<div class="r"><b>' + esc(it.productName) + '</b> <span class="chip">カートン</span><a href="' + esc(x.png) + '" target="_blank" title="大きく見る"><img src="' + esc(x.png) + '"></a><ul>' +
+          return x.ok ? '<div class="r"><b>' + esc(it.productName) + '</b> <span class="chip">' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') + '</span><a href="' + esc(x.png) + '" target="_blank" title="大きく見る"><img src="' + esc(x.png) + '"></a><ul>' +
             x.checks.map(function (c) { return '<li class="' + (c.indexOf('⚠') === 0 ? 'w' : '') + '">' + esc(c) + '</li>'; }).join('') + '</ul><a href="' + esc(x.pdf) + '" target="_blank">PDF を開く</a><a href="' + esc(x.ai) + '" download="' + esc(x.name) + '.ai">AI を保存</a></div>'
-            : '<div class="r ng"><b>' + esc(it.productName) + '</b> <span class="chip">カートン</span><br>作れませんでした：' + esc(x.error) + '</div>';
+            : '<div class="r ng"><b>' + esc(it.productName) + '</b> <span class="chip">' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') + '</span><br>作れませんでした：' + esc(x.error) + '</div>';
         }).join('') + '</div>';
         if (ng) msg(ng + '件が作れませんでした。「戻る」で直してください', 'bad');
         else msg(ok.length + '件の下書きができました。絵を見て、よければ「確定する」', 'good');
