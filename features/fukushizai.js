@@ -120,6 +120,9 @@
     '#fk-root .need .f>span{font-size:12px;color:#555}',
     '#fk-root .need input{width:90px;font:inherit;padding:6px 8px;border:1px solid #cfd5d8;border-radius:3px}',
     '#fk-root .need .f.wide input{width:280px}',
+    '#fk-root .pic{display:flex;align-items:center;gap:8px}',
+    '#fk-root .pic img{height:44px;max-width:120px;border:1px solid #cfd5d8;border-radius:3px;background:#fff;object-fit:contain}',
+    '#fk-root .picbtn{display:inline-block;cursor:pointer;padding:6px 10px;border:1px solid #cfd5d8;border-radius:3px;background:#fff;font-size:13px}',
     '#fk-root .need select{font:inherit;padding:6px 8px;border:1px solid #cfd5d8;border-radius:3px}',
     '#fk-root .total{font-size:13px;padding-bottom:7px;color:#1b6fa8;font-weight:bold;min-width:110px}',
     '#fk-root .bad{border-color:#e74c3c !important;background:#fff6f5}',
@@ -329,6 +332,9 @@
     };
     var mainHtml = function (m) {
       var f = m[2], attr = 'data-k="' + m[0] + '" data-j="' + m[1] + '"';
+      if (f[7] === 'file') return '<div class="f wide"><span>' + esc(f[1]) + '</span><div class="pic">' + (f[2] ? '<img src="' + esc(f[2]) + '">' : '') +
+        '<label class="small picbtn">' + (f[2] ? '選び直す' : '絵を選ぶ') + '<input type="file" accept="image/png,image/jpeg" data-file="1" data-k="' + m[0] + '" data-jj="' + m[1] + '" hidden></label>' +
+        (f[2] ? '<button type="button" class="small picrm" data-k="' + m[0] + '" data-jj="' + m[1] + '">外す</button>' : '<span class="src" title="' + esc(f[3]) + '">絵が要る型だけ</span>') + '</div></div>';
       return '<div class="f' + (NUM[f[0]] ? '' : ' wide') + '"><span>' + esc(f[1]) + '</span>' + (f[7] ? opts(f, attr) : '<input ' + attr + ' value="' + esc(f[2]) + '" ' + (NUM[f[0]] ? 'inputmode="numeric"' : 'title="' + esc(f[3]) + '"') + '>') + '</div>';
     };
     // カートンの入力(個数)→合計→副資材の入力、の順に並べる
@@ -363,6 +369,28 @@
       el.oninput = el.onchange = function () { it.kinds[el.dataset.k].fields[+el.dataset.j][2] = el.value; refresh(card, it); };
     });
     if (q('.det')) q('.det').ontoggle = function () { it.open = q('.det').open; };
+    // 商品の絵:その場で小さくしてから持つ(長い辺 1800 まで)。サーバーでグレーにして入れる
+    Array.prototype.forEach.call(card.querySelectorAll('input[data-file]'), function (el) {
+      el.onchange = function () {
+        var file = el.files && el.files[0]; if (!file) return;
+        var rd = new FileReader();
+        rd.onload = function () {
+          var im = new Image();
+          im.onload = function () {
+            var k = Math.min(1, 1800 / Math.max(im.width, im.height)), c = document.createElement('canvas');
+            c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+            var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+            it.kinds[el.dataset.k].fields[+el.dataset.jj][2] = c.toDataURL('image/png'); render();
+          };
+          im.onerror = function () { msg('この絵は読めませんでした(PNG か JPEG を選んでください)', 'bad'); };
+          im.src = rd.result;
+        };
+        rd.readAsDataURL(file);
+      };
+    });
+    Array.prototype.forEach.call(card.querySelectorAll('.picrm'), function (b) {
+      b.onclick = function () { it.kinds[b.dataset.k].fields[+b.dataset.jj][2] = ''; render(); };
+    });
     if (q('.misel')) q('.misel').onchange = function () {   // 自分で選び直したら、その商品だけの値として扱う(対応表は変えない)
       var v = q('.misel').value;
       it.madeIn = { value: v, seizo: it.madeIn.seizo, state: v ? 'chosen' : 'none', why: v ? 'この商品だけ手で選びました' : '選んでください' };
