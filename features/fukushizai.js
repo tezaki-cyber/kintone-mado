@@ -24,14 +24,14 @@
   var SOURCES = {
     852: { label: '商品管理表', f: { name: '商品名', jan: 'JANコード', price: '税込価格', cat: '商品カテゴリ', seizo: '製造先', box: 'BOX入数', carton: 'カートン入数', hanro: '販路' }, alt: {}, base: '' },
     867: { label: '進捗表', f: { name: '商品名', jan: 'JANコード', price: '', cat: '商品カテゴリ', seizo: '製造工場', box: '', carton: '', hanro: '販路' },
-           alt: { name: 'シート_商品名', jan: 'シート_JAN', price: 'シート_税込', seizo: 'シート_製造先', box: 'シート_BOX入数', carton: 'シート_入り数', hanro: 'シート_販路' }, base: '商品名 != ""' }
+           alt: { name: 'シート_商品名', jan: 'シート_JAN', price: 'シート_税込', seizo: 'シート_製造先', box: 'シート_BOX入数', carton: 'シート_入り数', hanro: 'シート_販路', holder: 'シート_権利元' }, base: '商品名 != ""' }
   };
   var SRC = SOURCES[APP] || SOURCES[852];
   var F = SRC.f;
   var KIND = { carton: 'カートンマーク', sticker: '副資材(裏貼りシール)' };
   var NUM = { perBag: 1, bags: 1 };
 
-  var root, products = [], items = [], master = {}, countries = [], kinds = {}, step = 0, draft = null, pickFilter = '', picked = {}, seizoNames = null, skipped = 0;
+  var root, products = [], items = [], master = {}, countries = [], kinds = {}, step = 0, draft = null, pickFilter = '', picked = {}, seizoNames = null, skipped = 0, titles = [], titlesAt = '';
 
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var $ = function (s) { return root.querySelector(s); };
@@ -44,7 +44,7 @@
     var sheet = !val(r, SRC.f.name).trim() && !!val(r, SRC.alt.name).trim();   // スプレッドシート由来の行
     return { id: +r.$id.value, name: pick('name'), jan: pick('jan').normalize('NFKC').replace(/[^0-9]/g, ''), priceIn: digits(pick('price')), category: val(r, F.cat),
              seizo: pick('seizo').normalize('NFKC'), box: digits(pick('box')), carton: /^[0-9,]+$/.test(pick('carton').normalize('NFKC')) ? digits(pick('carton')) : '',
-             hanro: pick('hanro') || (sheet ? '一般' : '') };
+             hanro: pick('hanro') || (sheet ? '一般' : ''), holder: pick('holder') };
   }
   var isInt = function (v) { v = String(v).trim().normalize('NFKC'); return /^[0-9]+$/.test(v) && +v > 0; };
   var chunk = function (a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
@@ -120,6 +120,8 @@
     '#fk-root .need .f>span{font-size:12px;color:#555}',
     '#fk-root .need input{width:90px;font:inherit;padding:6px 8px;border:1px solid #cfd5d8;border-radius:3px}',
     '#fk-root .need .f.wide input{width:280px}',
+    '#fk-root .need .f.cr input{width:440px}','#fk-root .need .f.cr select{max-width:340px}','#fk-root .need input[readonly]{background:#f2f4f5;color:#333}',
+    '#fk-root .line.crl{color:#1e7e45}#fk-root .line.crl.warn{color:#8a5f00}',
     '#fk-root .pic{display:flex;align-items:center;gap:8px}',
     '#fk-root .pic img{height:44px;max-width:120px;border:1px solid #cfd5d8;border-radius:3px;background:#fff;object-fit:contain}',
     '#fk-root .picbtn{display:inline-block;cursor:pointer;padding:6px 10px;border:1px solid #cfd5d8;border-radius:3px;background:#fff;font-size:13px}',
@@ -260,12 +262,50 @@
       });
       return call('prepare', { products: sel, master: master, seizoNames: seizoNames, sourceName: SRC.label });
     }).then(function (r) {
-      countries = r.countries; items = r.items;
+      countries = r.countries; items = r.items; titles = r.titles || []; titlesAt = r.titlesAt || '';
       items.forEach(function (it) { it.guardOk = false; it.open = false; });
       kinds = { carton: 1 };
       setStep(1); render();
       if (skipped) { msg('選んだ行のうち、JAN のない ' + skipped + ' 件は外しました'); skipped = 0; }
     }).catch(fail);
+  }
+
+  // ---------- ©:タイトルマスターから ----------
+  // 作品を選ぶと、タイトルマスターの字のまま©が入る(手では直せない)。「タイトルマスターに無い」を選んだときだけ手で入れられる。
+  // 作るときにサーバーがもう一度マスターと見比べる。
+  var fld = function (it, key) { return it.kinds.sticker.fields.filter(function (f) { return f[0] === key; })[0]; };
+  var titleOf = function (id) { return titles.filter(function (t) { return t.id === id; })[0]; };
+  var tLabel = function (t) { return t.name + (t.note ? '(' + t.note + ')' : '') + (t.cr ? (t.verified ? ' ✓' : ' ※未確認') : ' ※©なし'); };
+  function applyCr(it) {
+    var ft = fld(it, 'crTitle'), ff = fld(it, 'crForm'), fc = fld(it, 'copyright'), ok = fld(it, 'crOk');
+    if (!ft || !fc) return;
+    var t = titleOf(ft[2]);
+    if (t && ff[2] === 'short' && !t.crShort) ff[2] = 'full';   // 短縮表記の無い作品は正規表記
+    if (t && !t.cr) { ft[2] = ''; t = null; }
+    fc[2] = t ? (ff[2] === 'short' ? t.crShort : t.cr) : '';
+    fc[6] = !!t; fc[3] = t ? 'タイトルマスターの字のまま' : '監修済みの表記を入れてください';
+    if (ok) ok[2] = '';   // ©が変わったら、目視確認はやり直し
+  }
+  var hk = function (x) { return String(x || '').normalize('NFKC').toLowerCase().replace(/株式会社|有限会社|合同会社|\(株\)|\(有\)/g, '').replace(/[^0-9a-z\u3040-\u30ff\u3400-\u9fff]/g, ''); };
+  function holderCheck(a, b) {
+    var sp = function (x) { return String(x || '').normalize('NFKC').split(/[\/、,\n;]/).map(hk).filter(function (y) { return y.length >= 2; }); };
+    var A = sp(a), B = sp(b);
+    if (!A.length || !B.length) return 'unknown';
+    return A.some(function (x) { return B.some(function (y) { return x.indexOf(y) >= 0 || y.indexOf(x) >= 0; }); }) ? 'same' : 'differ';
+  }
+  function stale() {   // 写しが1日より古いときは知らせる(Apps Script が止まっている)
+    var m = /^(\d+)-(\d+)-(\d+) (\d+):(\d+)$/.exec(titlesAt); if (!m) return false;
+    return Date.now() - Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 9, +m[5]) > 26 * 3600 * 1000;
+  }
+  function crLine(it) {
+    var ft = fld(it, 'crTitle'); if (!ft) return '';
+    var t = titleOf(ft[2]), at = titlesAt ? '(写し ' + esc(titlesAt.slice(5)) + (stale() ? '・⚠ 1日より古い写しです' : '') + ')' : '';
+    if (!t) return '<div class="line crl warn">⚠ ©：' + esc(ft[2] ? '選んだ作品が見つかりません' : ft[3]) + '</div>';
+    var hc = holderCheck(it.product.holder, t.holder), w = !t.verified || hc === 'differ' || stale();
+    return '<div class="line crl ' + (w ? 'warn' : '') + '">' + (w ? '⚠' : '✓') + ' ©はタイトルマスター「' + esc(t.name) + '」' + (t.id !== t.name ? '(' + esc(t.id) + ')' : '') + 'から' +
+      (t.verified ? '・確認済み' : '・<b>マスターで「確認済み」になっていません</b>') +
+      (hc === 'same' ? '・権利元も' + SRC.label + 'と一致(' + esc(t.holder) + ')' : hc === 'differ' ? '・<b>権利元の書き方が違います</b>：' + SRC.label + '「' + esc(it.product.holder) + '」／マスター「' + esc(t.holder) + '」' : '') +
+      ' ' + at + '<br>' + esc(fld(it, 'copyright')[2]) + '</div>';
   }
 
   // ---------- 1 中身を確かめる ----------
@@ -326,6 +366,7 @@
     if (st === 'stopped') return h + '</div>';
     if (hist.length) h += '<div class="line hist">⚠ ' + hist.map(function (x) { return (x.kind === 'carton' ? 'カートン' : '副資材シール') + 'は ' + esc(x.at) + ' に' + (x.by ? esc(x.by) + 'さんが' : '') + '作成済み'; }).join('／') + '。作り直すと新しい版として残ります。</div>';
     if (!ak.length) return h + '</div>';
+    if (kinds.sticker && it.kinds.sticker.available) h += crLine(it);
     var per = main.filter(function (m) { return m[2][0] === 'perBag'; })[0];
     var opts = function (f, attr) {   // 選ぶ形の項目(8番目に [値, 見出し] の並び)
       return '<select ' + attr + '>' + f[7].map(function (o) { return '<option value="' + esc(o[0]) + '" ' + (String(f[2]) === o[0] ? 'selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
@@ -335,6 +376,17 @@
       if (f[7] === 'file') return '<div class="f wide"><span>' + esc(f[1]) + '</span><div class="pic">' + (f[2] ? '<img src="' + esc(f[2]) + '">' : '') +
         '<label class="small picbtn">' + (f[2] ? '選び直す' : '絵を選ぶ') + '<input type="file" accept="image/png,image/jpeg" data-file="1" data-k="' + m[0] + '" data-jj="' + m[1] + '" hidden></label>' +
         (f[2] ? '<button type="button" class="small picrm" data-k="' + m[0] + '" data-jj="' + m[1] + '">外す</button>' : '<span class="src" title="' + esc(f[3]) + '">絵が要る型だけ</span>') + '</div></div>';
+      if (f[7] === 'titles') {   // 作品を選ぶ。商品名から当たった作品を上に、残りは読みの順
+        var cand = (f[8] || []).map(titleOf).filter(Boolean), rest = titles.filter(function (t) { return cand.indexOf(t) < 0; })
+          .sort(function (a, b) { return (a.yomi || a.name).localeCompare(b.yomi || b.name, 'ja'); });
+        var op = function (t) { return '<option value="' + esc(t.id) + '" ' + (f[2] === t.id ? 'selected' : '') + (t.cr ? '' : ' disabled') + '>' + esc(tLabel(t)) + '</option>'; };
+        return '<div class="f cr"><span>' + esc(f[1]) + '</span><select ' + attr + ' data-cr="1" title="' + esc(f[3]) + '"><option value="">' + (titles.length ? 'タイトルマスターに無い(©を手で入れる)' : 'タイトルマスターの写しがありません(©を手で入れる)') + '</option>' +
+          (cand.length ? '<optgroup label="商品名から当たった作品">' + cand.map(op).join('') + '</optgroup><optgroup label="ほかの作品">' + rest.map(op).join('') + '</optgroup>' : rest.map(op).join('')) + '</select></div>';
+      }
+      if (f[0] === 'crForm') return '<div class="f"><span>' + esc(f[1]) + '</span><select ' + attr + ' data-cr="1">' + f[7].map(function (o) {
+        var t = titleOf(fld(it, 'crTitle')[2]), off = o[0] === 'short' && t && !t.crShort;
+        return '<option value="' + esc(o[0]) + '" ' + (String(f[2]) === o[0] ? 'selected' : '') + (off ? ' disabled' : '') + '>' + esc(o[1]) + (off ? '(マスターに無い)' : '') + '</option>'; }).join('') + '</select></div>';
+      if (f[0] === 'copyright') return '<div class="f cr"><span>' + esc(f[1]) + '</span><input ' + attr + ' value="' + esc(f[2]) + '" title="' + esc(f[3]) + '" ' + (f[6] ? 'readonly' : 'placeholder="監修済みの表記を入れてください"') + '></div>';
       return '<div class="f' + (NUM[f[0]] ? '' : ' wide') + '"><span>' + esc(f[1]) + '</span>' + (f[7] ? opts(f, attr) : '<input ' + attr + ' value="' + esc(f[2]) + '" ' + (NUM[f[0]] ? 'inputmode="numeric"' : 'title="' + esc(f[3]) + '"') + '>') + '</div>';
     };
     // カートンの入力(個数)→合計→副資材の入力、の順に並べる
@@ -366,7 +418,11 @@
     if (q('.rm')) q('.rm').onclick = function () { items.splice(items.indexOf(it), 1); render(); };
     if (q('.gchk')) q('.gchk').onchange = function () { it.guardOk = q('.gchk').checked; q('.guard').classList.toggle('done', it.guardOk); refresh(card, it); };
     Array.prototype.forEach.call(card.querySelectorAll('[data-j]'), function (el) {
-      el.oninput = el.onchange = function () { it.kinds[el.dataset.k].fields[+el.dataset.j][2] = el.value; refresh(card, it); };
+      el.oninput = el.onchange = function () {
+        it.kinds[el.dataset.k].fields[+el.dataset.j][2] = el.value;
+        if (el.dataset.cr) { applyCr(it); return render(); }   // 作品・書き方を変えたら、©をマスターの字で入れ直す
+        refresh(card, it);
+      };
     });
     if (q('.det')) q('.det').ontoggle = function () { it.open = q('.det').open; };
     // 商品の絵:その場で小さくしてから持つ(長い辺 1800 まで)。サーバーでグレーにして入れる
