@@ -305,6 +305,7 @@
     return '<div class="line crl ' + (w ? 'warn' : '') + '">' + (w ? '⚠' : '✓') + ' ©はタイトルマスター「' + esc(t.name) + '」' + (t.id !== t.name ? '(' + esc(t.id) + ')' : '') + 'から' +
       (t.verified ? '・確認済み' : '・<b>マスターで「確認済み」になっていません</b>') +
       (hc === 'same' ? '・権利元も' + SRC.label + 'と一致(' + esc(t.holder) + ')' : hc === 'differ' ? '・<b>権利元の書き方が違います</b>：' + SRC.label + '「' + esc(it.product.holder) + '」／マスター「' + esc(t.holder) + '」' : '') +
+      ((ft[8] || []).indexOf(t.id) >= 0 && ft[9] ? '・' + esc(ft[9]) : '') +
       ' ' + at + '<br>' + esc(fld(it, 'copyright')[2]) + '</div>';
   }
 
