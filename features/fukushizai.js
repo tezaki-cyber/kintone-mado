@@ -381,9 +381,11 @@
     };
     var mainHtml = function (m) {
       var f = m[2], attr = 'data-k="' + m[0] + '" data-j="' + m[1] + '"';
-      if (f[7] === 'file') return '<div class="f wide"><span>' + esc(f[1]) + '</span><div class="pic">' + (f[2] ? '<img src="' + esc(f[2]) + '">' : '') +
-        '<label class="small picbtn">' + (f[2] ? '選び直す' : '絵を選ぶ') + '<input type="file" accept="image/png,image/jpeg" data-file="1" data-k="' + m[0] + '" data-jj="' + m[1] + '" hidden></label>' +
-        (f[2] ? '<button type="button" class="small picrm" data-k="' + m[0] + '" data-jj="' + m[1] + '">外す</button>' : '<span class="src" title="' + esc(f[3]) + '">絵が要る型だけ</span>') + '</div></div>';
+      if (f[0] === 'shoshiImage' && fld(it, 'shoshi')[2] !== 'print') return '';   // 証紙データは「印刷証紙」のときだけ
+      var sh = f[0] === 'shoshiImage', isImg = String(f[2]).indexOf('data:image') === 0;
+      if (f[7] === 'file') return '<div class="f wide"><span>' + esc(f[1]) + '</span><div class="pic">' + (f[2] ? (isImg ? '<img src="' + esc(f[2]) + '">' : '<span class="chip">' + esc(f[9] || 'ファイル') + ' を選択済み</span>') : '') +
+        '<label class="small picbtn">' + (f[2] ? '選び直す' : sh ? '証紙データを選ぶ' : '絵を選ぶ') + '<input type="file" accept="' + (sh ? 'image/png,image/jpeg,.pdf,.ai' : 'image/png,image/jpeg') + '" data-file="1" data-k="' + m[0] + '" data-jj="' + m[1] + '" hidden></label>' +
+        (f[2] ? '<button type="button" class="small picrm" data-k="' + m[0] + '" data-jj="' + m[1] + '">外す</button>' : '<span class="src" title="' + esc(f[3]) + '">' + (sh ? 'PNG・JPEG・PDF・AI。入れないと丸ポチのまま' : '絵が要る型だけ') + '</span>') + '</div></div>';
       if (f[7] === 'titles') {   // 作品を選ぶ。商品名から当たった作品を上に、残りは読みの順
         var cand = (f[8] || []).map(titleOf).filter(Boolean), rest = titles.filter(function (t) { return cand.indexOf(t) < 0; })
           .sort(function (a, b) { return (a.yomi || a.name).localeCompare(b.yomi || b.name, 'ja'); });
@@ -429,6 +431,7 @@
       el.oninput = el.onchange = function () {
         it.kinds[el.dataset.k].fields[+el.dataset.j][2] = el.value;
         if (el.dataset.cr) { applyCr(it); return render(); }   // 作品・書き方を変えたら、©をマスターの字で入れ直す
+        if (it.kinds[el.dataset.k].fields[+el.dataset.j][0] === 'shoshi') return render();   // 証紙を変えたら、証紙データの欄を出す・しまう
         refresh(card, it);
       };
     });
@@ -437,6 +440,13 @@
     Array.prototype.forEach.call(card.querySelectorAll('input[data-file]'), function (el) {
       el.onchange = function () {
         var file = el.files && el.files[0]; if (!file) return;
+        var tf = it.kinds[el.dataset.k].fields[+el.dataset.jj];
+        if (/\.(pdf|ai)$/i.test(file.name)) {   // PDF・AI はそのまま送る(サーバーが1ページ目を絵にする)
+          if (file.size > 6 * 1024 * 1024) return msg('このファイルは大きすぎます(6MB まで)', 'bad');
+          var r2 = new FileReader();
+          r2.onload = function () { tf[2] = String(r2.result).replace(/^data:[^;,]*/, 'data:application/pdf'); tf[9] = file.name; render(); };
+          return r2.readAsDataURL(file);
+        }
         var rd = new FileReader();
         rd.onload = function () {
           var im = new Image();
