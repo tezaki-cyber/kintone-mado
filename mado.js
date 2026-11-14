@@ -13,7 +13,7 @@
 (function () {
   'use strict';
   if (window.BCR_MADO) return;                 // 二重に登録されても1回だけ動く
-  var VERSION = '2026-11-13.7';                // 機能を更新したら変える(古い読み置きを使わせないため)
+  var VERSION = '2026-11-14.1';                // 機能を更新したら変える(古い読み置きを使わせないため)
 
   // 機能の一覧。apps=動かすアプリ番号 / events=動かす画面 / views=一覧の名前(一覧の画面のときだけ見る。空ならどの一覧でも)
   var FEATURES = [
