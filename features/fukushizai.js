@@ -141,13 +141,27 @@
     '#fk-root .grid input[readonly]{background:#f2f4f5;color:#555;font-family:Consolas,monospace}',
     '#fk-root .grid .src{margin-top:4px;justify-self:start}',
     '#fk-root .tbl{margin:4px 0 0;font-size:12px}#fk-root .tbl table{width:auto}#fk-root .tbl td{padding:4px 10px 4px 0;border:none}#fk-root .tbl select{font:inherit;font-size:12px;padding:2px 4px}',
-    '#fk-root .res{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}',
+    '#fk-root .res{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:14px}',
+    '#fk-root .pvbar{display:block;margin:0 0 10px;font-size:13px;cursor:pointer}','#fk-root .pvbar small{color:#888;margin-left:6px}',
+    '#fk-root .pv{position:relative;cursor:zoom-in;user-select:none}','#fk-root .pv img{display:block}',
+    '#fk-root .pvx{position:absolute;left:6px;top:12px;background:#fff;border:1px solid #c8cdd0;border-radius:4px;font-size:11px;padding:1px 7px;color:#555;pointer-events:none}','#fk-root .pvx:empty{display:none}',
+    '#fk-root .pvh{position:absolute;right:6px;bottom:12px;background:rgba(0,0,0,.62);color:#fff;font-size:11px;padding:3px 10px;border-radius:12px;pointer-events:none}',
+    '#fk-root .lens{display:none;position:absolute;width:240px;height:240px;border-radius:50%;border:2px solid #2a8fd6;box-shadow:0 4px 18px rgba(0,0,0,.35);background-color:#fff;background-repeat:no-repeat;pointer-events:none;z-index:3}',
+    '#fk-root .fkv{display:none;position:fixed;inset:0;z-index:5;background:#2b2f33;flex-direction:column;color:#fff}','#fk-root .fkv.on{display:flex}',
+    '#fk-root .vbar{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#111;font-size:14px}','#fk-root .vbar b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '#fk-root .vbar button{background:transparent;color:#fff;border-color:rgba(255,255,255,.5);font-size:13px;padding:4px 12px}','#fk-root .vk{min-width:110px;text-align:center;font-size:13px}',
+    '#fk-root .vstage{flex:1;position:relative;overflow:hidden;cursor:grab;user-select:none}','#fk-root .vstage.drag{cursor:grabbing}',
+    '#fk-root .vimg{position:absolute;left:0;top:0;max-width:none;transform-origin:0 0;background:#fff}',
+    '#fk-root .varr{position:absolute;top:50%;margin-top:-30px;width:44px;height:60px;padding:0;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:30px;line-height:1;border-radius:6px}','#fk-root .vl{left:12px}','#fk-root .vr{right:12px}',
+    '#fk-root .vmini{position:absolute;right:14px;bottom:14px;width:150px;border:2px solid #fff;background:#fff;pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,.5)}','#fk-root .vmini img{display:block;width:100%}',
+    '#fk-root .vmini i{position:absolute;border:2px solid #e74c3c;background:rgba(231,76,60,.15)}',
+    '#fk-root .vfoot{display:flex;gap:24px;padding:7px 14px;background:#111;font-size:12px;color:#ccc;flex-wrap:wrap}',
     '#fk-root .res .r{border:1px solid #e3e7e8;border-radius:6px;padding:10px}',
     '#fk-root .res .r.ng{border:2px solid #e74c3c;color:#a5281b}',
     '#fk-root .res img{width:100%;border:1px solid #eee;margin:6px 0}',
     '#fk-root .res a{margin-right:10px;color:#2a8fd6}',
     '#fk-root .cmp{border:2px solid #f0b400;background:#fffbea;border-radius:6px;padding:8px 10px;margin:6px 0 8px;font-size:13px}','#fk-root .cmp.done{border-color:#27ae60;background:#f2fbf5}',
-    '#fk-root .res .r.st{grid-column:1/-1;display:grid;grid-template-columns:290px 1fr;column-gap:18px;align-items:start}','#fk-root .res .r.st>*{grid-column:1}','#fk-root .res .r.st>.cmp{grid-column:2;grid-row:1/span 12;margin:0;min-width:0}',
+    '#fk-root .res .r.st{grid-column:1/-1;display:grid;grid-template-columns:minmax(290px,56%) 1fr;column-gap:18px;align-items:start}','#fk-root .res .r.st>*{grid-column:1}','#fk-root .res .r.st>.cmp{grid-column:2;grid-row:1/span 12;margin:0;min-width:0}',
     '#fk-root .cmp .crimg{width:auto !important;max-width:100%;height:auto;max-height:64px;border:1px solid #e3e7e8 !important}','#fk-root .cmp .crtxt{line-height:1.6}',
     '#fk-root .cmp table{width:100%}','#fk-root .cmp th{background:none;position:static;white-space:nowrap;color:#666;font-size:12px;padding:3px 8px 3px 0;border:none;vertical-align:top;width:1%}','#fk-root .cmp td{border:none;padding:3px 0;white-space:normal !important;word-break:break-all}',
     '#fk-root .cmp .crtxt{font-size:15px;font-weight:bold;font-family:"Yu Gothic","Meiryo",sans-serif}','#fk-root .cmp .cap{font-size:11px;color:#666;margin-top:6px}','#fk-root .cmp .crimg{background:#fff;margin:2px 0 6px}',
@@ -530,9 +544,15 @@
       return call('generate', { kinds: Object.keys(kinds), items: send, master: master, sourceName: SRC.label }).then(function (r) {
         draft = r; setStep(2);
         var ok = r.results.filter(function (x) { return x.ok; }), ng = r.results.length - ok.length;
-        $('.body').innerHTML = '<div class="res">' + r.results.map(function (x) {
+        pics = ok.map(function (x) {
           var it = items.filter(function (i) { return i.id === x.id; })[0] || { productName: '' };
-          return x.ok ? '<div class="r' + (x.kind === 'sticker' && x.cr ? ' st' : '') + '"><b>' + esc(it.productName) + '</b> <span class="chip">' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') + '</span><a href="' + esc(x.png) + '" target="_blank" title="大きく見る"><img src="' + esc(x.png) + '"></a><ul>' +
+          return { png: x.png, mm: x.mm, title: it.productName + ' ／ ' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') };
+        });
+        $('.body').innerHTML = (ok.length ? '<label class="pvbar"><input type="checkbox" class="lzon"> 虫めがね <small>絵の上にマウスを置くと、その周りを拡大します。絵を押すと、画面いっぱいの拡大表示が開きます</small></label>' : '') +
+          '<div class="res">' + r.results.map(function (x) {
+          var it = items.filter(function (i) { return i.id === x.id; })[0] || { productName: '' };
+          return x.ok ? '<div class="r' + (x.kind === 'sticker' && x.cr ? ' st' : '') + '"><b>' + esc(it.productName) + '</b> <span class="chip">' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') + '</span>' +
+            '<div class="pv" data-i="' + ok.indexOf(x) + '"><img src="' + esc(x.png) + '" draggable="false"><span class="pvx"></span><span class="pvh">押すと拡大</span><div class="lens"></div></div><ul>' +
             x.checks.map(function (c) { return '<li class="' + (c.indexOf('⚠') === 0 ? 'w' : '') + '">' + esc(c) + '</li>'; }).join('') + '</ul>' + cmpHtml(x) + '<a href="' + esc(x.pdf) + '" target="_blank">PDF を開く</a><a href="' + esc(x.ai) + '" download="' + esc(x.name) + '.ai">AI を保存</a></div>'
             : '<div class="r ng"><b>' + esc(it.productName) + '</b> <span class="chip">' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') + '</span><br>作れませんでした：' + esc(x.error) + '</div>';
         }).join('') + '</div>';
@@ -540,6 +560,7 @@
         else msg(ok.length + '件の下書きができました。絵を見て、よければ「確定する」', 'good');
         $('.go').disabled = ng > 0 || ok.length === 0;
         $$('.crchk').forEach(function (c) { c.onchange = function () { c.closest('.cmp').classList.toggle('done', c.checked); gate2(); }; });
+        wirePics();
         gate2();
       }).catch(fail);
     }
@@ -577,6 +598,101 @@
     if (left) msg('副資材シールの見比べが あと' + left + '件 残っています(商品名・作品・©を見て、印を付けてください)', 'bad');
     else if (all.length && !bad) msg('見比べが済みました。よければ「確定する」', 'good');
     $('.go').disabled = bad || left > 0 || !draft.results.some(function (x) { return x.ok; });
+  }
+
+  // ---------- できあがりの絵を大きく見る:虫めがね(マウスを置いた所)と、拡大表示(絵を押す) ----------
+  var pics = [], V = null;
+  // 実物の何倍で映っているか(画面の細かさは機械で違うので目安)。絵に写した範囲の幅(mm)と、画面での幅(px)から出す
+  function realScale(p, w) { return p && p.mm && p.mm[0] ? w / (p.mm[0] / 25.4 * 96) : 0; }
+  function times(k) { return k ? '実物の 約' + (k >= 10 ? Math.round(k) : Math.round(k * 10) / 10) + '倍' : ''; }
+  function wirePics() {
+    var sw = $('.lzon'); if (!sw) return;
+    var on = '1'; try { on = localStorage.getItem('fk-lens') || '1'; } catch (e) { /* 覚えられなくても動く */ }
+    sw.checked = on === '1';
+    sw.onchange = function () { try { localStorage.setItem('fk-lens', sw.checked ? '1' : '0'); } catch (e) { /* 同上 */ } };
+    $$('.pv').forEach(function (pv) {
+      var img = pv.querySelector('img'), lens = pv.querySelector('.lens'), p = pics[+pv.dataset.i];
+      var say = function () { pv.querySelector('.pvx').textContent = times(realScale(p, img.clientWidth)); };
+      if (img.complete && img.naturalWidth) say(); else img.onload = say;
+      pv.onmousemove = function (e) {
+        var b = img.getBoundingClientRect(), mx = e.clientX - b.left, my = e.clientY - b.top, Z = 3, D = 240;
+        if (!sw.checked || mx < 0 || my < 0 || mx > b.width || my > b.height) { lens.style.display = 'none'; return; }
+        lens.style.display = 'block';
+        lens.style.left = (img.offsetLeft + mx - D / 2) + 'px'; lens.style.top = (img.offsetTop + my - D / 2) + 'px';
+        lens.style.backgroundImage = 'url("' + img.src + '")';
+        lens.style.backgroundSize = (b.width * Z) + 'px ' + (b.height * Z) + 'px';
+        lens.style.backgroundPosition = (D / 2 - mx * Z) + 'px ' + (D / 2 - my * Z) + 'px';
+      };
+      pv.onmouseleave = function () { lens.style.display = 'none'; };
+      pv.onclick = function () { lens.style.display = 'none'; view(+pv.dataset.i); };
+    });
+  }
+  // 拡大表示:小窓の上に重ねる。ホイールで拡大・縮小(マウスの位置を中心に)、押したまま動かして移動、← → で前後の絵、Esc で閉じる
+  function view(i) {
+    if (!V) {
+      var el = document.createElement('div'); el.className = 'fkv';
+      el.innerHTML = '<div class="vbar"><b class="vt"></b><span class="vn"></span><button type="button" class="small vm" title="縮小">−</button><span class="vk"></span><button type="button" class="small vp" title="拡大">＋</button>' +
+        '<button type="button" class="small vfit">全体を見る</button><button type="button" class="small vx">✕ 閉じる</button></div>' +
+        '<div class="vstage"><img class="vimg" draggable="false"><button type="button" class="varr vl" title="前の絵">‹</button><button type="button" class="varr vr" title="次の絵">›</button>' +
+        '<div class="vmini"><img draggable="false"><i></i></div></div>' +
+        '<div class="vfoot"><span>ホイール：拡大・縮小</span><span>押したまま動かす：見たい所へ</span><span>← →：前後の絵</span><span>Esc：閉じる</span></div>';
+      root.appendChild(el);
+      V = { el: el, i: 0, s: 1, x: 0, y: 0, img: el.querySelector('.vimg'), stage: el.querySelector('.vstage') };
+      var q = function (s) { return el.querySelector(s); };
+      V.draw = function () {
+        var W = V.stage.clientWidth, H = V.stage.clientHeight, nw = V.img.naturalWidth, nh = V.img.naturalHeight;
+        if (!nw) return;
+        // 絵が枠より小さい向きは真ん中に、大きい向きは端より外へ行かないように
+        var fx = nw * V.s <= W, fy = nh * V.s <= H;
+        V.x = fx ? (W - nw * V.s) / 2 : Math.min(0, Math.max(W - nw * V.s, V.x));
+        V.y = fy ? (H - nh * V.s) / 2 : Math.min(0, Math.max(H - nh * V.s, V.y));
+        V.img.style.transform = 'translate(' + V.x + 'px,' + V.y + 'px) scale(' + V.s + ')';
+        q('.vk').textContent = times(realScale(pics[V.i], nw * V.s));
+        var mini = q('.vmini'), box = mini.querySelector('i');
+        mini.style.display = fx && fy ? 'none' : 'block';
+        box.style.left = Math.max(0, -V.x / V.s / nw * 100) + '%'; box.style.top = Math.max(0, -V.y / V.s / nh * 100) + '%';
+        box.style.width = Math.min(100, W / V.s / nw * 100) + '%'; box.style.height = Math.min(100, H / V.s / nh * 100) + '%';
+      };
+      V.fit = function () { var nw = V.img.naturalWidth, nh = V.img.naturalHeight; if (!nw) return; V.min = Math.min(V.stage.clientWidth / nw, V.stage.clientHeight / nh) * 0.96; V.s = V.min; V.draw(); };
+      V.zoom = function (k, cx, cy) {   // (cx, cy) の下にある所を動かさずに、k 倍する
+        var ns = Math.min(Math.max(V.s * k, V.min || 0.05), 3);
+        V.x = cx - (cx - V.x) * ns / V.s; V.y = cy - (cy - V.y) * ns / V.s; V.s = ns; V.draw();
+      };
+      V.show = function (n) {
+        V.i = (n + pics.length) % pics.length; var p = pics[V.i];
+        q('.vt').textContent = p.title; q('.vn').textContent = pics.length > 1 ? (V.i + 1) + ' / ' + pics.length + ' 枚目' : '';
+        q('.vl').style.display = q('.vr').style.display = pics.length > 1 ? '' : 'none';
+        V.img.onload = V.fit; V.img.src = p.png; q('.vmini img').src = p.png;
+        if (V.img.complete && V.img.naturalWidth) V.fit();
+      };
+      V.close = function () { el.classList.remove('on'); };
+      var mid = function () { return [V.stage.clientWidth / 2, V.stage.clientHeight / 2]; };
+      q('.vx').onclick = V.close; q('.vfit').onclick = V.fit;
+      q('.vp').onclick = function () { var m = mid(); V.zoom(1.4, m[0], m[1]); };
+      q('.vm').onclick = function () { var m = mid(); V.zoom(1 / 1.4, m[0], m[1]); };
+      q('.vl').onclick = function () { V.show(V.i - 1); }; q('.vr').onclick = function () { V.show(V.i + 1); };
+      V.stage.addEventListener('wheel', function (e) {
+        e.preventDefault(); var b = V.stage.getBoundingClientRect();
+        V.zoom(Math.exp(-e.deltaY * 0.0015), e.clientX - b.left, e.clientY - b.top);
+      }, { passive: false });
+      V.stage.addEventListener('mousedown', function (e) {
+        if (e.target.closest('button')) return;
+        e.preventDefault(); var sx = e.clientX - V.x, sy = e.clientY - V.y; V.stage.classList.add('drag');
+        var mv = function (ev) { V.x = ev.clientX - sx; V.y = ev.clientY - sy; V.draw(); };
+        var up = function () { V.stage.classList.remove('drag'); document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
+        document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+      });
+      V.stage.addEventListener('dblclick', function (e) { if (e.target.closest('button')) return; var b = V.stage.getBoundingClientRect(); V.zoom(2, e.clientX - b.left, e.clientY - b.top); });
+      document.addEventListener('keydown', function (e) {   // 開いている間だけ。下の画面にキーが届かないようにする
+        if (!el.classList.contains('on') || !root.classList.contains('on')) return;
+        var k = e.key, m = mid();
+        if (k === 'Escape') V.close(); else if (k === 'ArrowLeft') { if (pics.length > 1) V.show(V.i - 1); } else if (k === 'ArrowRight') { if (pics.length > 1) V.show(V.i + 1); }
+        else if (k === '+' || k === ';') V.zoom(1.4, m[0], m[1]); else if (k === '-') V.zoom(1 / 1.4, m[0], m[1]); else return;
+        e.preventDefault(); e.stopPropagation();
+      }, true);
+      window.addEventListener('resize', function () { if (el.classList.contains('on')) V.draw(); });
+    }
+    V.el.classList.add('on'); V.show(i);
   }
 
   // ---------- まとめてフォルダに保存(確定のあと) ----------
