@@ -31,7 +31,7 @@
   var KIND = { carton: 'カートンマーク', sticker: '副資材(裏貼りシール)' };
   var NUM = { perBag: 1, bags: 1 };
 
-  var root, products = [], items = [], master = {}, countries = [], kinds = {}, step = 0, draft = null, pickFilter = '', picked = {}, seizoNames = null, skipped = 0, titles = [], titlesAt = '', stat = {}, gotAi = {};
+  var root, products = [], items = [], master = {}, countries = [], kinds = {}, step = 0, draft = null, pickFilter = '', picked = {}, seizoNames = null, skipped = 0, titles = [], titlesAt = '', stat = {}, gotAi = {}, fileBase = '', onChange = null, stMats = {}, stGeneric = {}, cautions = [], cautionPicks = {};
 
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var $ = function (s) { return root.querySelector(s); };
@@ -174,7 +174,15 @@
     '#fk-root .savehint{color:#888;font-size:12px}',
     '#fk-root .after{margin-top:14px;padding:12px;background:#f7f9fa;border-radius:6px;font-size:13px;line-height:1.8}',
     '#fk-root .wait{padding:40px;text-align:center;color:#888}',
-    '#fk-root .sv{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;white-space:nowrap;cursor:default}','#fk-root .sv.ok{color:#1e7e45;background:#e6f6ec}','#fk-root .sv.mid{color:#8a5f00;background:#fff3cf}',
+    '#fk-root .sv{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;white-space:nowrap;cursor:default}','#fk-root .sv.ok{color:#1e7e45;background:#e6f6ec}','#fk-root .sv.mid{color:#8a5f00;background:#fff3cf}','#fk-root .sv.no{color:#888;background:#eef0f1}',
+    '#fk-root .need .f.mats input{width:300px;display:block;margin-bottom:4px}',
+    '#fk-root .need .f.caus{flex:1 1 100%}','#fk-root .caun{color:#1b6fa8}','#fk-root .caun.zero{color:#e74c3c}',
+    '#fk-root .causec{margin:0 0 6px;border:1px solid #e3e7e8;border-radius:6px;padding:2px 10px 6px}','#fk-root .causec summary{font-size:12px}',
+    '#fk-root .cau{display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:12px;line-height:1.6;cursor:pointer;border-top:1px dotted #e3e7e8}',
+    '#fk-root .cau input{width:auto;margin-top:3px;flex:none}','#fk-root .cau b{margin-right:8px;color:#333}','#fk-root .cau i{font-style:normal;font-size:11px;color:#8a5f00;background:#fff3cf;border-radius:8px;padding:0 6px;margin-right:6px}','#fk-root .cau span{color:#555}','#fk-root .need .f.mats .must{color:#e74c3c;font-size:11px}','#fk-root .need .f.mats .src{align-self:flex-start}',
+    '#fk-root.view .steps,#fk-root.view .go,#fk-root.view .back{display:none !important}','#fk-root.view .pop{width:min(620px,100%)}',
+    '#fk-root .vname{font-weight:bold;font-size:15px;margin-bottom:10px}','#fk-root .vf a{margin-right:14px;color:#2a8fd6;font-size:13px}',
+    '#fk-root .vhint{color:#888;font-size:12px;margin:4px 0 12px}',
     '.fk-open{background:#2a8fd6;color:#fff;border:1px solid #2a8fd6;border-radius:4px;padding:0 16px;height:40px;font-size:14px;font-weight:bold;cursor:pointer;margin-left:8px}'
   ].join('\n');
 
@@ -205,7 +213,8 @@
   // サーバーが商品ごとに覚えている {レコード番号: {carton|sticker: {at, by, saved, where}}}。確定で at、フォルダに保存(AI を受け取る)で saved が入る
   var KSHORT = { carton: 'カートン', sticker: 'シール' };
   var md = function (at) { var m = /^\d+-(\d+)-(\d+) (\d+:\d+)/.exec(at || ''); return m ? +m[1] + '/' + +m[2] + ' ' + m[3] : (at || ''); };
-  function loadStat() { return call('status').then(function (r) { stat = r.status || {}; }).catch(function () { /* 読めなくても作れる */ }); }
+  function loadStat() { return call('status').then(function (r) { stat = r.status || {}; fileBase = r.fileBase || ''; told(); }).catch(function () { /* 読めなくても作れる */ }); }
+  function told() { if (onChange) try { onChange(stat); } catch (e) { /* 表が閉じていても困らない */ } }   // 進捗表の表に、印の変わったことを伝える
   function statTip(k, e) {
     return KIND[k] + '：' + md(e.at) + ' に' + (e.by ? e.by + 'さんが' : '') + '作成' + (e.saved ? '、' + md(e.saved) + ' に' + (e.where ? '「' + e.where + '」へ' : '') + '保存' : '。まだ保存していません');
   }
@@ -218,14 +227,39 @@
     if (!list.length) return Promise.resolve();
     return call('saved', { where: where, results: list.map(function (x) { return { id: x.id, kind: x.kind, name: x.name }; }) }).then(function (r) {
       list.forEach(function (x) { var e = (stat[x.id] || {})[x.kind]; if (e) { e.saved = r.at; e.where = where; } });
+      told();
     });
+  }
+  // 進捗表の表で印を押したとき:その商品の作成・保存のようすを見せる。ファイルはサーバーに残っている写しから開く
+  // (ブラウザからは、パソコンのフォルダそのものは開けない。保存先はフォルダの名前で見せる)
+  function show(id, name) {
+    build(); root.classList.add('on', 'view'); msg('');
+    $('.body').innerHTML = '<div class="wait">作成・保存のようすを読んでいます…</div>';
+    var draw = function () {
+      var s = stat[id] || {};
+      $('.body').innerHTML = '<div class="vname">' + esc(name || '') + '</div>' + Object.keys(KIND).map(function (k) {
+        var e = s[k];
+        if (!e) return '<div class="card"><div class="ttl"><b>' + KIND[k] + '</b><span class="sv no">まだ作っていません</span></div></div>';
+        var url = e.f && e.n && fileBase ? fileBase + e.f + '/' + e.n : '';
+        return '<div class="card ' + (e.saved ? 'ready' : 'todo') + '"><div class="ttl"><b>' + KIND[k] + '</b><span class="sv ' + (e.saved ? 'ok' : 'mid') + '">' + (e.saved ? '保存済み' : '作成済み・未保存') + '</span></div>' +
+          '<div class="line">作成：' + esc(md(e.at)) + (e.by ? ' ' + esc(e.by) + 'さん' : '') + '<br>保存：' + (e.saved ? esc(md(e.saved)) + (e.where ? ' 保存先「' + esc(e.where) + '」' : '') : 'まだ保存していません') + '</div>' +
+          (url ? '<div class="line vf"><a href="' + esc(url + '.pdf') + '" target="_blank">PDF を開く</a><a class="vai" data-k="' + k + '" href="' + esc(url + '.ai') + '" download="' + esc(e.n) + '.ai">AI を保存</a></div>'
+               : '<div class="line na">この版のファイルの写しは残っていません。作り直すと開けるようになります</div>') + '</div>';
+      }).join('') + '<div class="vhint">ファイルは、作ったときの写しをサーバーから開きます(保存したものと同じ中身です)。保存先のフォルダそのものは、ブラウザからは開けません。</div>' +
+        '<button type="button" class="vremake">この商品の副資材・カートンを作る(作り直す)</button>';
+      $('.vremake').onclick = function () { open([id]); };
+      $$('.vai').forEach(function (a) {
+        a.addEventListener('click', function () { markSaved([{ id: id, kind: a.dataset.k, name: s[a.dataset.k].n }], '1つずつ受け取り').then(draw, function () {}); });
+      });
+    };
+    loadStat().then(draw);
   }
 
   // ---------- 0 商品を選ぶ ----------
   // ids を渡すと(進捗表で行を選んでから押したとき)、商品選びを飛ばして、その商品の中身の確認から始める
   function open(ids) {
     ids = (Array.isArray(ids) ? ids : []).map(Number).filter(function (n) { return n > 0; });
-    build(); root.classList.add('on'); setStep(0); picked = {}; pickFilter = ''; skipped = 0; gotAi = {};
+    build(); root.classList.add('on'); root.classList.remove('view'); setStep(0); picked = {}; pickFilter = ''; skipped = 0; gotAi = {};
     var ls = loadStat();
     $('.body').innerHTML = '<div class="wait">' + SRC.label + 'を読んでいます…</div>'; msg(''); $('.go').disabled = true;
     var cond = SRC.base; if (!cond) { try { cond = kintone.app.getQueryCondition() || ''; } catch (e) { /* 条件なしで読む */ } }
@@ -304,7 +338,9 @@
       });
       return call('prepare', { products: sel, master: master, seizoNames: seizoNames, sourceName: SRC.label });
     }).then(function (r) {
-      countries = r.countries; items = r.items; titles = r.titles || []; titlesAt = r.titlesAt || '';
+      countries = r.countries; items = r.items; titles = r.titles || []; titlesAt = r.titlesAt || ''; stMats = r.stMats || {};
+      stGeneric = r.stGeneric || {}; cautions = r.cautions || []; cautionPicks = r.cautionPicks || {};
+      items.forEach(function (it) { applyCau(it, true); applyMats(it); });
       items.forEach(function (it) { it.guardOk = false; it.open = false; });
       kinds = {};   // 作るものは、開いた人が選ぶ(最初から選んでおくと、カートンと副資材が一緒に作られてしまう)
       setStep(1); render();
@@ -318,6 +354,50 @@
   var fld = function (it, key) { return it.kinds.sticker.fields.filter(function (f) { return f[0] === key; })[0]; };
   var titleOf = function (id) { return titles.filter(function (t) { return t.id === id; })[0]; };
   var tLabel = function (t) { return t.name + (t.note ? '(' + t.note + ')' : '') + (t.cr ? (t.verified ? ' ✓' : ' ※未確認') : ' ※©なし'); };
+  // ---------- 注意文(汎用の型のときだけ) ----------
+  // 専用の型がない商品は「汎用の型」で作る。注意文は、注意文マスタ(MOJICO)の文から人が選ぶ。
+  // 最初は「全商品記載」の基本の文に印。同じ種類で前に確定した組み合わせがあれば、それを最初から入れる
+  var isGen = function (it) { var t = it.kinds.sticker && fld(it, 'stType'); return !!(t && stGeneric[t[2]]); };
+  var pickKey = function (it) { return fld(it, 'stGroup')[2] + '｜' + (it.category || ''); };
+  function applyCau(it, reset) {
+    var f = it.kinds.sticker && fld(it, 'cautions'); if (!f) return;
+    f[4] = isGen(it);
+    if (!f[4]) return;
+    if (reset || !f[2]) {
+      var known = {}; cautions.forEach(function (r) { known[r.id] = 1; });
+      var p = (cautionPicks[pickKey(it)] || []).filter(function (i) { return known[i]; });
+      f[2] = (p.length ? p : cautions.filter(function (r) { return r.base; }).map(function (r) { return r.id; })).join(',');
+      f[10] = p.length ? 'memo' : 'base';
+    }
+  }
+  function cauHtml(it, f) {
+    var on = {}; String(f[2] || '').split(',').forEach(function (i) { if (i) on[i] = 1; });
+    var g = fld(it, 'stGroup')[2], A = [], B = [], C = [];
+    cautions.forEach(function (r) { (r.groups.indexOf(g) >= 0 ? A : r.all ? B : C).push(r); });
+    var row = function (r) {
+      return '<label class="cau"><input type="checkbox" class="cauchk" value="' + esc(r.id) + '" ' + (on[r.id] ? 'checked' : '') + '><span><b>' + esc(r.summary || r.item) + '</b>' +
+        (r.channels ? '<i>' + esc(r.channels) + ' 向け</i>' : '') + esc(r.text) + '</span></label>';
+    };
+    var sec = function (title, list, open) {
+      if (!list.length) return '';
+      var n = list.filter(function (r) { return on[r.id]; }).length;
+      return '<details class="causec" ' + (open || n ? 'open' : '') + '><summary>' + title + '(' + list.length + '文' + (n ? '・' + n + '文を選択中' : '') + ')</summary>' + list.map(row).join('') + '</details>';
+    };
+    if (!cautions.length) return '<div class="f caus"><span>注意文</span><div class="line na">注意文マスタが読めませんでした。小窓を開き直してください</div></div>';
+    return '<div class="f caus"><span>注意文(注意文マスタから選ぶ) <b class="caun"></b> <span class="src">' + (f[10] === 'memo' ? '前に同じ種類で確定した組み合わせを入れています' : '基本の文に印を付けています。商品に合わせて足し引きしてください') + '</span></span>' +
+      sec('「' + esc(g) + '」向けの文', A, true) + sec('全商品向けの文', B, true) + sec('ほかの商材向けの文', C, false) + '</div>';
+  }
+
+  // ---------- 製品素材(素材表記) ----------
+  // 素材の欄がある型だけ、型に入っている素材を入力欄に出す(そのままなら型のまま、直せば直した字で作る)。
+  // Tシャツのように見本の値が入っている型は、空にして必ず入れてもらう
+  var matOf = function (it) { var t = it.kinds.sticker && fld(it, 'stType'); return t ? stMats[t[2]] : null; };
+  function applyMats(it, reset) {
+    var f = it.kinds.sticker && fld(it, 'materials'); if (!f) return;
+    var m = matOf(it), def = m && !m.required ? m.lines.join('／') : '';
+    if (reset || !String(f[2] || '').trim()) f[2] = def;   // 型を変えたら、その型の素材に入れ直す(行の数が型ごとに違うため)
+    f[4] = !!(m && m.required);
+  }
   function applyCr(it) {
     var ft = fld(it, 'crTitle'), ff = fld(it, 'crForm'), fc = fld(it, 'copyright'), ok = fld(it, 'crOk');
     if (!ft || !fc) return;
@@ -420,6 +500,15 @@
     var mainHtml = function (m) {
       var f = m[2], attr = 'data-k="' + m[0] + '" data-j="' + m[1] + '"';
       if (f[0] === 'shoshiImage' && fld(it, 'shoshi')[2] !== 'print') return '';   // 証紙データは「印刷証紙」のときだけ
+      if (f[0] === 'stGroup' && !isGen(it)) return '';   // 商材と注意文は、汎用の型のときだけ
+      if (f[7] === 'cautions') return isGen(it) ? cauHtml(it, f) : '';
+      if (f[7] === 'mats') {   // 製品素材:素材の欄がある型だけ。型の行数ぶんの入力欄
+        var mt = matOf(it); if (!mt) return '';
+        var cur = String(f[2] || '').split(/[／\/\n]/);
+        return '<div class="f mats"><span>' + esc(f[1]) + (mt.required ? ' <b class="must">必ず入れる</b>' : '') + '</span>' + mt.lines.map(function (ln, r) {
+          return '<input class="matin" data-r="' + r + '" value="' + esc((cur[r] || '').trim()) + '" placeholder="' + esc((mt.required ? '例：' : '') + ln) + '" title="' + esc(f[3]) + '">';
+        }).join('') + '<span class="src">' + (mt.required ? 'この型の素材は見本です。商品の素材を入れてください' : '型のままでよければ、そのままで') + '</span></div>';
+      }
       var sh = f[0] === 'shoshiImage', isImg = String(f[2]).indexOf('data:image') === 0;
       if (f[7] === 'file') return '<div class="f wide"><span>' + esc(f[1]) + '</span><div class="pic">' + (f[2] ? (isImg ? '<img src="' + esc(f[2]) + '">' : '<span class="chip">' + esc(f[9] || 'ファイル') + ' を選択済み</span>') : '') +
         '<label class="small picbtn">' + (f[2] ? '選び直す' : sh ? '証紙データを選ぶ' : '絵を選ぶ') + '<input type="file" accept="' + (sh ? 'image/png,image/jpeg,.pdf,.ai' : 'image/png,image/jpeg') + '" data-file="1" data-k="' + m[0] + '" data-jj="' + m[1] + '" hidden></label>' +
@@ -469,6 +558,9 @@
       el.oninput = el.onchange = function () {
         it.kinds[el.dataset.k].fields[+el.dataset.j][2] = el.value;
         if (el.dataset.cr) { applyCr(it); return render(); }   // 作品・書き方を変えたら、©をマスターの字で入れ直す
+        var fk = it.kinds[el.dataset.k].fields[+el.dataset.j][0];
+        if (fk === 'stType') { applyMats(it, true); applyCau(it, true); return render(); }   // 型を変えたら、製品素材と注意文の欄をその型のものに
+        if (fk === 'stGroup') { applyCau(it, true); return render(); }                       // 商材を変えたら、その商材で覚えている組み合わせ(無ければ基本の文)に
         if (it.kinds[el.dataset.k].fields[+el.dataset.j][0] === 'shoshi') return render();   // 証紙を変えたら、証紙データの欄を出す・しまう
         refresh(card, it);
       };
@@ -515,6 +607,18 @@
         render();
       }).catch(fail);
     };
+    Array.prototype.forEach.call(card.querySelectorAll('.cauchk'), function (el) {   // 注意文:印の付いた番号を , でつないで持つ
+      el.onchange = function () {
+        fld(it, 'cautions')[2] = Array.prototype.filter.call(card.querySelectorAll('.cauchk'), function (x) { return x.checked; }).map(function (x) { return x.value; }).join(',');
+        refresh(card, it);
+      };
+    });
+    Array.prototype.forEach.call(card.querySelectorAll('.matin'), function (el) {   // 製品素材:行ごとの欄を ／ でつないで持つ
+      el.oninput = function () {
+        fld(it, 'materials')[2] = Array.prototype.map.call(card.querySelectorAll('.matin'), function (x) { return x.value.trim(); }).filter(Boolean).join('／');
+        refresh(card, it);
+      };
+    });
     refresh(card, it);
   }
   function refresh(card, it) {   // 入力のたびに、その商品の状態だけ書き直す(打っている途中で入力欄を作り直さない)
@@ -525,6 +629,10 @@
       var f = it.kinds[el.dataset.k].fields[+el.dataset.j], v = String(f[2] == null ? '' : f[2]).trim();
       el.classList.toggle('bad', !!((f[4] && !v) || (v && NUM[f[0]] && !isInt(v))));
     });
+    var cn = card.querySelector('.caun');
+    if (cn) { var nn = String(fld(it, 'cautions')[2] || '').split(',').filter(Boolean).length; cn.textContent = nn + '文を選択中'; cn.classList.toggle('zero', !nn); }
+    var mf = it.kinds.sticker && fld(it, 'materials'), m0 = card.querySelector('.matin');
+    if (m0) m0.classList.toggle('bad', !!(mf && mf[4] && !String(mf[2] || '').trim()));
     var sel = card.querySelector('.misel'); if (sel) sel.classList.toggle('bad', !it.madeIn.value);
     var tot = card.querySelector('.total');
     if (tot) {
@@ -595,10 +703,16 @@
     if (step === 2) {
       $('.go').disabled = true;
       var ok = draft.results.filter(function (x) { return x.ok; });
-      return call('finalize', { folder: draft.folder, results: ok.map(function (x) { return { id: x.id, kind: x.kind, name: x.name, crOk: x.kind === 'sticker' }; }) }).then(function (r) {
+      var picks = {};   // 汎用の型で選んだ注意文の組み合わせ。確定したら、種類ごとに覚えてもらう
+      ok.forEach(function (x) {
+        var it = items.filter(function (i) { return i.id === x.id; })[0];
+        if (x.kind === 'sticker' && it && isGen(it) && fld(it, 'cautions')[2]) { picks[pickKey(it)] = fld(it, 'cautions')[2].split(','); cautionPicks[pickKey(it)] = picks[pickKey(it)]; }
+      });
+      return call('finalize', { folder: draft.folder, picks: picks, results: ok.map(function (x) { return { id: x.id, kind: x.kind, name: x.name, crOk: x.kind === 'sticker' }; }) }).then(function (r) {
         setStep(3);
         var me = ''; try { me = kintone.getLoginUser().name; } catch (e) { /* 名前なし */ }
-        ok.forEach(function (x) { (stat[x.id] = stat[x.id] || {})[x.kind] = { at: r.at, by: me, saved: '', where: '' }; });
+        ok.forEach(function (x) { (stat[x.id] = stat[x.id] || {})[x.kind] = { at: r.at, by: me, saved: '', where: '', f: draft.folder, n: x.name }; });
+        told();
         markSaved(Object.keys(gotAi).map(function (i) { return gotAi[i]; }), '1つずつ受け取り').catch(function () {}); gotAi = {};
         $('.body').insertAdjacentHTML('beforeend', '<div class="after">✓ ' + r.count + '件を確定しました(' + esc(r.at) + ')。作成の記録を残しました。<br><button type="button" class="saveall">まとめてフォルダに保存</button> <span class="savehint">保存先のフォルダを選ぶと、PDF と AI を全部まとめて入れます。1つずつ受け取るときは、上の「PDF を開く」「AI を保存」から。</span></div>');
         $('.saveall').onclick = saveAll;
@@ -760,7 +874,8 @@
   }
 
   // ---------- 入口:一覧「副資材・カートン」のときだけボタンを出す ----------
-  window.BCR_FUKU = { open: open, status: function () { return loadStat().then(function () { return stat; }); } };   // status: 作成済み・保存済みの早見表(進捗表の表に印を出すとき用)   // 進捗表の表(別の枠の中)から呼ぶ入口: parent.BCR_FUKU.open([レコード番号…])
+  window.BCR_FUKU = { open: open, show: show, status: function () { return loadStat().then(function () { return stat; }); },
+    set onChange(f) { onChange = f; } };   // show: 印を押したときの小窓。onChange: 印が変わったら呼ぶ(進捗表の表が入れる)   // status: 作成済み・保存済みの早見表(進捗表の表に印を出すとき用)   // 進捗表の表(別の枠の中)から呼ぶ入口: parent.BCR_FUKU.open([レコード番号…])
   function onIndex(ev) {
     if (APP !== 852 || ev.viewName !== CONFIG.view) return ev;   // ボタンを足すのは商品管理表の専用一覧だけ。進捗表は表の道具列のボタンから開く
     if (document.querySelector('.fk-open')) return ev;   // 古い登録(ファイル版)が残っていても、ボタンは1つだけ
