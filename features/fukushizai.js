@@ -31,7 +31,7 @@
   var KIND = { carton: 'カートンマーク', sticker: '副資材(裏貼りシール)' };
   var NUM = { perBag: 1, bags: 1 };
 
-  var root, products = [], items = [], master = {}, countries = [], kinds = {}, step = 0, draft = null, pickFilter = '', picked = {}, seizoNames = null, skipped = 0, titles = [], titlesAt = '', stat = {}, gotAi = {}, fileBase = '', onChange = null, stMats = {}, stGeneric = {}, cautions = [], cautionPicks = {};
+  var root, products = [], items = [], master = {}, countries = [], kinds = {}, step = 0, draft = null, pickFilter = '', picked = {}, seizoNames = null, skipped = 0, titles = [], titlesAt = '', stat = {}, gotAi = {}, fileBase = '', onChange = null, stMats = {}, stGeneric = {}, cautions = [], cautionPicks = {}, sheetOn = true;
 
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var $ = function (s) { return root.querySelector(s); };
@@ -176,7 +176,8 @@
     '#fk-root .wait{padding:40px;text-align:center;color:#888}',
     '#fk-root .sv{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;white-space:nowrap;cursor:default}','#fk-root .sv.ok{color:#1e7e45;background:#e6f6ec}','#fk-root .sv.mid{color:#8a5f00;background:#fff3cf}','#fk-root .sv.no{color:#888;background:#eef0f1}',
     '#fk-root .need .f.mats input{width:300px;display:block;margin-bottom:4px}',
-    '#fk-root .need .f.caus{flex:1 1 100%}','#fk-root .caun{color:#1b6fa8}','#fk-root .caun.zero{color:#e74c3c}',
+    '#fk-root .need .f.caus{flex:1 1 100%}','#fk-root .shon{cursor:pointer}','#fk-root .shon input{width:auto}','#fk-root .chip.shno{background:#eaf5fd;color:#1b6fa8;font-weight:bold}',
+    '#fk-root .res .r.sheet{grid-column:1/-1;border:2px solid #2a8fd6;background:#f7fbff}','#fk-root .caun{color:#1b6fa8}','#fk-root .caun.zero{color:#e74c3c}',
     '#fk-root .causec{margin:0 0 6px;border:1px solid #e3e7e8;border-radius:6px;padding:2px 10px 6px}','#fk-root .causec summary{font-size:12px}',
     '#fk-root .cau{display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:12px;line-height:1.6;cursor:pointer;border-top:1px dotted #e3e7e8}',
     '#fk-root .cau input{width:auto;margin-top:3px;flex:none}','#fk-root .cau b{margin-right:8px;color:#333}','#fk-root .cau i{font-style:normal;font-size:11px;color:#8a5f00;background:#fff3cf;border-radius:8px;padding:0 6px;margin-right:6px}','#fk-root .cau span{color:#555}','#fk-root .need .f.mats .must{color:#e74c3c;font-size:11px}','#fk-root .need .f.mats .src{align-self:flex-start}',
@@ -268,6 +269,7 @@
       : kget(APP, (cond ? cond + ' ' : '') + 'order by $id desc', READ);
     load.then(function (recs) { return ls.then(function () { return recs; }); }).then(function (recs) {
       products = recs.map(toProduct);
+      if (ids.length) products.sort(function (a, b) { return ids.indexOf(a.id) - ids.indexOf(b.id); });   // 進捗表の表で選んだ行の順(上から)にする
       // JAN のある商品(=作れる商品)を上に。それぞれの中は新しい順のまま
       products = products.filter(function (p) { return p.jan; }).concat(products.filter(function (p) { return !p.jan; }));
       if (!ids.length) return renderPick();
@@ -341,7 +343,7 @@
       countries = r.countries; items = r.items; titles = r.titles || []; titlesAt = r.titlesAt || ''; stMats = r.stMats || {};
       stGeneric = r.stGeneric || {}; cautions = r.cautions || []; cautionPicks = r.cautionPicks || {};
       items.forEach(function (it) { applyCau(it, true); applyMats(it); });
-      items.forEach(function (it) { it.guardOk = false; it.open = false; });
+      items.forEach(function (it, i) { it.guardOk = false; it.open = false; it.ord = i; });   // ord: 進捗表の並び順(画面では入力待ちを上に並べ替えるので、順番を覚えておく)
       kinds = {};   // 作るものは、開いた人が選ぶ(最初から選んでおくと、カートンと副資材が一緒に作られてしまう)
       setStep(1); render();
       if (skipped) { msg('選んだ行のうち、JAN のない ' + skipped + ' 件は外しました'); skipped = 0; }
@@ -460,10 +462,13 @@
         return '<span class="kchip ' + (kinds[k] ? 'on' : '') + ' ' + (avail(k) ? '' : 'off') + '" data-k="' + k + '">' + (kinds[k] ? '✓ ' : '') + KIND[k] +
           (avail(k) ? '' : ' <small>(選んだ商品の型がまだありません)</small>') + '</span>';
       }).join('') + '</div>' +
+      (multi && kinds.sticker ? '<label class="bulk shon"><input type="checkbox" class="shchk" ' + (sheetOn ? 'checked' : '') + '> 同じ型・同じシリーズの副資材シールは、1枚の台紙に並べる ' +
+        '<span style="color:#888;font-size:12px">(それぞれトンボ付き。バーコードの上に ①②… を進捗表の並び順で入れます。1種だけの商品には付けません)</span></label>' : '') +
       (multi && kinds.carton ? '<div class="bulk">入り数をまとめて入れる： 1袋 <input class="bper" inputmode="numeric"> 個 × <input class="bbags" inputmode="numeric"> 袋 ' +
         '<button class="small bfill">空いている所に入れる</button><span style="color:#888;font-size:12px">(すでに入っている商品は変えません)</span></div>' : '') +
       items.map(cardHtml).join('') +
       '<details class="tbl"><summary>製造先と原産国の対応表を見る・直す</summary><div class="tblbody">読み込み中…</div></details>';
+    if ($('.shchk')) $('.shchk').onchange = function () { sheetOn = $('.shchk').checked; };
     $$('.kchip').forEach(function (c) {
       c.onclick = function () { var k = c.dataset.k; if (!avail(k)) return; if (kinds[k]) delete kinds[k]; else kinds[k] = 1; render(); };
     });
@@ -500,6 +505,9 @@
     var mainHtml = function (m) {
       var f = m[2], attr = 'data-k="' + m[0] + '" data-j="' + m[1] + '"';
       if (f[0] === 'shoshiImage' && fld(it, 'shoshi')[2] !== 'print') return '';   // 証紙データは「印刷証紙」のときだけ
+      if (f[0] === 'stInk') return '<div class="f"><span>' + esc(f[1]) + '</span><select ' + attr + ' title="' + esc(f[3]) + '">' +
+        f[7].map(function (o) { return '<option value="' + esc(o[0]) + '" ' + (String(f[2]) === o[0] ? 'selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') +
+        '<optgroup label="レジで読めないので選べません">' + (f[8] || []).map(function (n) { return '<option disabled>' + esc(n) + '</option>'; }).join('') + '</optgroup></select></div>';
       if (f[0] === 'stGroup' && !isGen(it)) return '';   // 商材と注意文は、汎用の型のときだけ
       if (f[7] === 'cautions') return isGen(it) ? cauHtml(it, f) : '';
       if (f[7] === 'mats') {   // 製品素材:素材の欄がある型だけ。型の行数ぶんの入力欄
@@ -672,20 +680,29 @@
     if (step === 3) return saveAll();   // 確定のあと:下の大きいボタンで、保存先のフォルダを選んでまとめて保存
     if (step === 1) {
       $('.go').disabled = true; msg('下書きを作って、バーコードを読み直しています…');
-      var send = items.filter(function (it) { return status(it) === 'ready'; });
-      return call('generate', { kinds: Object.keys(kinds), items: send, master: master, sourceName: SRC.label }).then(function (r) {
+      var send = items.filter(function (it) { return status(it) === 'ready'; }).sort(function (a, b) { return a.ord - b.ord; });   // 進捗表の並び順で送る(番号はこの順)
+      return call('generate', { kinds: Object.keys(kinds), items: send, master: master, sourceName: SRC.label, sheet: sheetOn }).then(function (r) {
         draft = r; setStep(2);
-        var ok = r.results.filter(function (x) { return x.ok; }), ng = r.results.length - ok.length;
+        var ok = r.results.filter(function (x) { return x.ok; }), ng = r.results.length - ok.length, sheets = r.sheets || [];
         pics = ok.map(function (x) {
           var it = items.filter(function (i) { return i.id === x.id; })[0] || { productName: '' };
-          return { png: x.png, mm: x.mm, title: it.productName + ' ／ ' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') };
+          return { png: x.png, mm: x.mm, title: (x.sheet ? x.sheet.no + ' ' : '') + it.productName + ' ／ ' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') };
         });
+        sheets.forEach(function (s) { pics.push({ png: s.png, mm: s.mm, title: '台紙 ' + s.count + '種 ／ ' + s.name }); });   // 台紙の絵は、1枚ずつの絵のあとに並べる
+        var sheetHtml = sheets.map(function (s, k) {
+          return '<div class="r sheet"><b>1枚の台紙にまとめたもの(' + s.count + '種)</b> <span class="chip">' + s.cols + '列×' + s.rows + '段・' + s.size[0] + '×' + s.size[1] + 'mm</span>' +
+            '<div class="pv" data-i="' + (ok.length + k) + '"><img src="' + esc(s.png) + '" draggable="false"><span class="pvx"></span><span class="pvh">押すと拡大</span><div class="lens"></div></div>' +
+            '<div class="line">入稿するのは、この台紙のファイルです。番号 ①②… は進捗表の並び順で、下の1枚ずつの絵と同じ番号です。</div>' +
+            '<a href="' + esc(s.pdf) + '" target="_blank">PDF を開く</a><a class="getsheet" data-s="' + k + '" href="' + esc(s.ai) + '" download="' + esc(s.name) + '.ai">AI を保存</a></div>';
+        }).join('');
         $('.body').innerHTML = (ok.length ? '<label class="pvbar"><input type="checkbox" class="lzon"> 虫めがね <small>絵の上にマウスを置くと、その周りを拡大します。絵を押すと、画面いっぱいの拡大表示が開きます</small></label>' : '') +
-          '<div class="res">' + r.results.map(function (x) {
+          '<div class="res">' + sheetHtml + r.results.map(function (x) {
           var it = items.filter(function (i) { return i.id === x.id; })[0] || { productName: '' };
           return x.ok ? '<div class="r' + (x.kind === 'sticker' && x.cr ? ' st' : '') + '"><b>' + esc(it.productName) + '</b> <span class="chip">' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') + '</span>' +
+            (x.sheet ? ' <span class="chip shno">台紙の ' + esc(x.sheet.no) + '(' + x.sheet.of + '種のうち)</span>' : '') +
             '<div class="pv" data-i="' + ok.indexOf(x) + '"><img src="' + esc(x.png) + '" draggable="false"><span class="pvx"></span><span class="pvh">押すと拡大</span><div class="lens"></div></div><ul>' +
-            x.checks.map(function (c) { return '<li class="' + (c.indexOf('⚠') === 0 ? 'w' : '') + '">' + esc(c) + '</li>'; }).join('') + '</ul>' + cmpHtml(x) + '<a href="' + esc(x.pdf) + '" target="_blank">PDF を開く</a><a class="getai" data-i="' + ok.indexOf(x) + '" href="' + esc(x.ai) + '" download="' + esc(x.name) + '.ai">AI を保存</a></div>'
+            x.checks.map(function (c) { return '<li class="' + (c.indexOf('⚠') === 0 ? 'w' : '') + '">' + esc(c) + '</li>'; }).join('') + '</ul>' + cmpHtml(x) + (x.sheet ? '<span class="src">ファイルは、上の台紙にまとめています</span>' :
+              '<a href="' + esc(x.pdf) + '" target="_blank">PDF を開く</a><a class="getai" data-i="' + ok.indexOf(x) + '" href="' + esc(x.ai) + '" download="' + esc(x.name) + '.ai">AI を保存</a>') + '</div>'
             : '<div class="r ng"><b>' + esc(it.productName) + '</b> <span class="chip">' + (x.kind === 'sticker' ? '副資材シール' : 'カートン') + '</span><br>作れませんでした：' + esc(x.error) + '</div>';
         }).join('') + '</div>';
         if (ng) msg(ng + '件が作れませんでした。「戻る」で直してください', 'bad');
@@ -694,6 +711,12 @@
         $$('.crchk').forEach(function (c) { c.onchange = function () { c.closest('.cmp').classList.toggle('done', c.checked); gate2(); }; });
         wirePics();
         gotAi = {};
+        $$('.getsheet').forEach(function (a) {   // 台紙の AI を受け取ったら、その台紙の商品を全部「保存済み」に
+          a.addEventListener('click', function () {
+            var s = sheets[+a.dataset.s], mem = ok.filter(function (x) { return x.sheet && x.sheet.name === s.name; });
+            if (step === 3) markSaved(mem, '1つずつ受け取り').catch(function () {}); else mem.forEach(function (x) { gotAi['s' + ok.indexOf(x)] = x; });
+          });
+        });
         $$('.getai').forEach(function (a) {   // 確定の前に受け取った分は覚えておき、確定のときにまとめて記録する
           a.addEventListener('click', function () { var x = ok[+a.dataset.i]; if (step === 3) markSaved([x], '1つずつ受け取り').catch(function () {}); else gotAi[a.dataset.i] = x; });
         });
@@ -845,7 +868,9 @@
   function saveAll() {
     if (!window.showDirectoryPicker) return msg('このブラウザではフォルダを選んで保存できません。Chrome か Edge で開いてください', 'bad');
     var files = [], done = draft.results.filter(function (x) { return x.ok; });
+    var seen = {};
     done.forEach(function (x) {
+      if (seen[x.name]) return; seen[x.name] = 1;   // 台紙にまとめた商品は、同じファイルを1回だけ保存する
       files.push({ name: x.name + '.pdf', url: x.pdf }); files.push({ name: x.name + '.ai', url: x.ai });
     });
     var dir;
