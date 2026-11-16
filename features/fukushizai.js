@@ -171,7 +171,7 @@
     '#fk-root .res li::before{content:"✓ ";color:#27ae60;font-weight:bold}',
     '#fk-root .res li.w::before{content:""}#fk-root .res li.w{color:#8a5f00}',
     '#fk-root .saveall{margin-top:8px;padding:8px 16px;border:0;border-radius:6px;background:#3498db;color:#fff;font-size:14px;font-weight:bold;cursor:pointer}',
-    '#fk-root .savehint{color:#888;font-size:12px}',
+    '#fk-root .savehint{color:#888;font-size:12px;line-height:1.7;margin-top:6px}','#fk-root .pickdir{margin-left:6px}',
     '#fk-root .after{margin-top:14px;padding:12px;background:#f7f9fa;border-radius:6px;font-size:13px;line-height:1.8}',
     '#fk-root .wait{padding:40px;text-align:center;color:#888}',
     '#fk-root .sv{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;white-space:nowrap;cursor:default}','#fk-root .sv.ok{color:#1e7e45;background:#e6f6ec}','#fk-root .sv.mid{color:#8a5f00;background:#fff3cf}','#fk-root .sv.no{color:#888;background:#eef0f1}',
@@ -205,7 +205,7 @@
     $$('.steps span').forEach(function (s) { s.classList.toggle('on', +s.dataset.s === n); });
     $('.back').style.display = (n === 1 || n === 2) ? '' : 'none';
     $('.go').disabled = false;
-    $('.go').textContent = n === 0 ? '次へ' : n === 1 ? '下書きを作る' : n === 2 ? '確定する' : '保存先を選んで、まとめて保存';
+    $('.go').textContent = n === 0 ? '次へ' : n === 1 ? '下書きを作る' : n === 2 ? '確定する' : 'ダウンロードフォルダに保存';
   }
   function msg(text, cls) { var m = $('.msg'); m.className = 'msg ' + (cls || ''); m.textContent = text; }
   function fail(e) { msg('うまくいきませんでした：' + (e && e.message ? e.message : e), 'bad'); $('.go').disabled = false; }
@@ -677,7 +677,7 @@
   // ---------- 2 できあがりを見る / 3 確定 ----------
   function onGo() {
     if (step === 0) return prepare();
-    if (step === 3) return saveAll();   // 確定のあと:下の大きいボタンで、保存先のフォルダを選んでまとめて保存
+    if (step === 3) return dlAll();   // 確定のあと:下の大きいボタンで、ダウンロードフォルダにまとめて保存(フォルダを選ばないので、つまずかない)
     if (step === 1) {
       $('.go').disabled = true; msg('下書きを作って、バーコードを読み直しています…');
       var send = items.filter(function (it) { return status(it) === 'ready'; }).sort(function (a, b) { return a.ord - b.ord; });   // 進捗表の並び順で送る(番号はこの順)
@@ -737,9 +737,11 @@
         ok.forEach(function (x) { (stat[x.id] = stat[x.id] || {})[x.kind] = { at: r.at, by: me, saved: '', where: '', f: draft.folder, n: x.name }; });
         told();
         markSaved(Object.keys(gotAi).map(function (i) { return gotAi[i]; }), '1つずつ受け取り').catch(function () {}); gotAi = {};
-        $('.body').insertAdjacentHTML('beforeend', '<div class="after">✓ ' + r.count + '件を確定しました(' + esc(r.at) + ')。作成の記録を残しました。<br><button type="button" class="saveall">まとめてフォルダに保存</button> <span class="savehint">保存先のフォルダを選ぶと、PDF と AI を全部まとめて入れます。1つずつ受け取るときは、上の「PDF を開く」「AI を保存」から。</span></div>');
-        $('.saveall').onclick = saveAll;
-        msg('確定しました。右のボタンで、保存先のフォルダを選んで PDF と AI をまとめて保存できます', 'good');
+        $('.body').insertAdjacentHTML('beforeend', '<div class="after">✓ ' + r.count + '件を確定しました(' + esc(r.at) + ')。作成の記録を残しました。<br><button type="button" class="saveall dlall">ダウンロードフォルダに保存</button> <button type="button" class="small pickdir">保存先のフォルダを選んで保存</button>' +
+          '<div class="savehint">「ダウンロードフォルダに保存」を押すと、PDF と AI を1つのファイル(zip)にまとめて、パソコンの「ダウンロード」に入れます。開くときは、そのファイルをダブルクリックしてください。<br>' +
+          '「保存先のフォルダを選んで保存」は、選んだフォルダに直接入れます。デスクトップ・ダウンロード・ドキュメントそのものと、ドライブのいちばん上は、ブラウザの決まりで選べません(その中に作ったフォルダなら選べます)。</div></div>');
+        $('.dlall').onclick = dlAll; $('.pickdir').onclick = saveAll;
+        msg('確定しました。右のボタンで、PDF と AI をまとめて保存できます', 'good');
         $('.body').scrollTop = $('.body').scrollHeight;
       }).catch(fail);
     }
@@ -865,14 +867,52 @@
 
   // ---------- まとめてフォルダに保存(確定のあと) ----------
   // 保存先はその場で選ぶ(共有ドライブのフォルダも選べる)。同じ名前のファイルがあるときは、上書きの前に必ず聞く。
-  function saveAll() {
-    if (!window.showDirectoryPicker) return msg('このブラウザではフォルダを選んで保存できません。Chrome か Edge で開いてください', 'bad');
-    var files = [], done = draft.results.filter(function (x) { return x.ok; });
-    var seen = {};
+  function saveList() {
+    var files = [], done = draft.results.filter(function (x) { return x.ok; }), seen = {};
     done.forEach(function (x) {
       if (seen[x.name]) return; seen[x.name] = 1;   // 台紙にまとめた商品は、同じファイルを1回だけ保存する
       files.push({ name: x.name + '.pdf', url: x.pdf }); files.push({ name: x.name + '.ai', url: x.ai });
     });
+    return { files: files, done: done };
+  }
+  // フォルダを選ばない保存:全部を1つのファイル(zip。中身は縮めずそのまま)にまとめて、ふつうのダウンロードで渡す
+  function crc32(u8) {
+    var t = crc32.t || (crc32.t = (function () { var a = [], n, k, c; for (n = 0; n < 256; n++) { c = n; for (k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; a[n] = c >>> 0; } return a; })());
+    var c = 0xFFFFFFFF; for (var i = 0; i < u8.length; i++) c = t[(c ^ u8[i]) & 255] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zipBlob(list) {   // list: [{name, data(Uint8Array)}]。名前は UTF-8(日本語の名前がそのまま出る)
+    var enc = new TextEncoder(), parts = [], cen = [], off = 0;
+    var le = function (n, b) { var a = []; for (var i = 0; i < b; i++) a.push((n >>> (8 * i)) & 255); return a; };
+    list.forEach(function (f) {
+      var nm = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+      var mid = [].concat(le(20, 2), le(0x0800, 2), le(0, 2), le(0, 2), le(0x21, 2), le(crc, 4), le(sz, 4), le(sz, 4), le(nm.length, 2), le(0, 2));
+      parts.push(new Uint8Array([0x50, 0x4b, 3, 4].concat(mid)), nm, f.data);
+      cen.push({ h: [0x50, 0x4b, 1, 2].concat(le(20, 2), mid, le(0, 2), le(0, 2), le(0, 2), le(0, 4), le(off, 4)), nm: nm });
+      off += 4 + mid.length + nm.length + sz;
+    });
+    var cs = 0; cen.forEach(function (c) { parts.push(new Uint8Array(c.h), c.nm); cs += c.h.length + c.nm.length; });
+    parts.push(new Uint8Array([0x50, 0x4b, 5, 6].concat(le(0, 2), le(0, 2), le(list.length, 2), le(list.length, 2), le(cs, 4), le(off, 4), le(0, 2))));
+    return new Blob(parts, { type: 'application/zip' });
+  }
+  function dlAll() {
+    var L = saveList(), d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };
+    var zname = '副資材・カートン_' + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '_' + z(d.getHours()) + z(d.getMinutes()) + '.zip';
+    msg('まとめています…'); $('.go').disabled = true;
+    Promise.all(L.files.map(function (f) {
+      return fetch(f.url).then(function (r) { if (!r.ok) throw new Error(f.name + ' を取り出せませんでした'); return r.arrayBuffer(); }).then(function (b) { return { name: f.name, data: new Uint8Array(b) }; });
+    })).then(function (list) {
+      var a = document.createElement('a'); a.href = URL.createObjectURL(zipBlob(list)); a.download = zname; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      $('.go').disabled = false;
+      var done = '「ダウンロード」に「' + zname + '」を保存しました(PDF と AI ' + L.files.length + ' 個入り)。';
+      msg(done, 'good');
+      return markSaved(L.done, 'ダウンロード').then(function () { msg(done + '保存済みの印を付けました', 'good'); }, function () {});
+    }).catch(function (e) { $('.go').disabled = false; msg('保存できませんでした：' + (e && e.message ? e.message : e), 'bad'); });
+  }
+  function saveAll() {
+    if (!window.showDirectoryPicker) return msg('このブラウザではフォルダを選んで保存できません。「ダウンロードフォルダに保存」を使ってください', 'bad');
+    var L = saveList(), files = L.files, done = L.done;
     var dir;
     window.showDirectoryPicker({ id: 'bcr-fukushizai', mode: 'readwrite' }).then(function (d) {
       dir = d; msg('保存しています…');
@@ -893,7 +933,7 @@
       return markSaved(done, dir.name).then(function () { msg('フォルダ「' + dir.name + '」に ' + n + ' 個のファイルを保存しました。保存済みの印を付けました', 'good'); },
         function () { msg('フォルダ「' + dir.name + '」に ' + n + ' 個のファイルを保存しました(保存済みの印は付けられませんでした)', 'good'); });
     }).catch(function (e) {
-      if (e && e.name === 'AbortError') return msg('保存をやめました');
+      if (e && e.name === 'AbortError') return msg('フォルダが選ばれませんでした。「ダウンロードフォルダに保存」なら、フォルダを選ばずに保存できます');
       msg('保存できませんでした：' + (e && e.message ? e.message : e), 'bad');
     });
   }
