@@ -13,7 +13,8 @@
   var APP = 867, ID = 'bcr-shohyo', LIMIT = 500;
   var F = { name: 'シート_商品名', lv: '商標_判定', text: '商標_内容', human: '商標_人の確認', memo: '商標_確認メモ', day: '商標_照合日', plan: 'シート_企画担当', make: 'シート_制作' };
   var HUMAN = ['未確認', '問題なし', '名前を変える', '相談中'];
-  var state = { rows: [], only: 'all', open: {} };
+  var JPP = 'https://www.j-platpat.inpit.go.jp/c1801/TR/JP-';   // 特許庁の商標照会(固定アドレス)。出願番号で開く
+  var state = { rows: [], only: 'all', open: {}, man: false };
 
   var CSS = [
     'body.bcr-shohyo-on #view-list-data-gaia, body.bcr-shohyo-on .gaia-argoui-app-index-pager { display: none !important; }',
@@ -51,6 +52,19 @@
     '#' + ID + ' .sh-how.yomi { color: #8a5200; border-color: #e6c58f; background: #fdf6e9; }',
     '#' + ID + ' .sh-own { font-size: 12px; color: #52606d; margin: 2px 0 0; }',
     '#' + ID + ' .sh-raw { font-size: 13px; color: #3e4c59; margin: 6px 0 0; white-space: pre-wrap; }',
+    '#' + ID + ' .sh-ev a { color: #1d6fb8; text-decoration: underline; }',
+    '#' + ID + ' .sh-hint { margin: 10px 0 4px; border: 1px solid #d6e0ea; background: #f7fafc; border-radius: 6px; padding: 10px 12px 8px; }',
+    '#' + ID + ' .sh-hint-h { font-size: 13px; font-weight: 700; color: #243b53; margin-bottom: 4px; }',
+    '#' + ID + ' .sh-hint-t { width: 100%; border-collapse: collapse; font-size: 13px; }',
+    '#' + ID + ' .sh-hint-t th { text-align: left; font-size: 12px; font-weight: 600; color: #616e7c; padding: 3px 12px 3px 0; border-bottom: 1px solid #d6e0ea; }',
+    '#' + ID + ' .sh-hint-t td { padding: 6px 12px 6px 0; border-bottom: 1px solid #e6edf3; vertical-align: top; }',
+    '#' + ID + ' .sh-hint-t td.k { font-weight: 700; white-space: nowrap; color: #243b53; }',
+    '#' + ID + ' .sh-hint-p { font-size: 12px; color: #52606d; margin: 6px 0 0; }',
+    '#' + ID + ' .sh-man { background: #fff; border: 1px solid #d9dee4; border-radius: 8px; padding: 8px 16px; margin-bottom: 14px; font-size: 13px; }',
+    '#' + ID + ' .sh-man summary { cursor: pointer; font-weight: 700; color: #1d6fb8; padding: 2px 0; }',
+    '#' + ID + ' .sh-man h4 { font-size: 13px; margin: 12px 0 2px; color: #243b53; }',
+    '#' + ID + ' .sh-man ul { margin: 0; padding-left: 20px; }',
+    '#' + ID + ' .sh-man li { margin: 2px 0; }',
     '#' + ID + ' .sh-bulk { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0 2px; padding: 8px 10px; background: #f5f7fa; border-radius: 6px; font-size: 13px; }',
     '#' + ID + ' select, #' + ID + ' input[type=text] { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid #b8c0c8; border-radius: 4px; background: #fff; color: #1f2933; }',
     '#' + ID + ' input[type=text] { width: 260px; }',
@@ -81,7 +95,11 @@
       var s = line.replace(/^[\s　]+/, '');
       if (!s) return;
       var m = s.match(/^(.+?): 「(.+?)」(登録|出願)(\S+) 第(\S+?)類(?: (.*?))?(?:\((.+)\))?$/);
-      cur.lines.push(m ? { how: m[1], mark: m[2], kind: m[3], num: m[4], cls: m[5], owner: m[6] || '', why: m[7] || '' } : { raw: s });
+      if (!m) { cur.lines.push({ raw: s }); return; }
+      // 番号は「登録6360826(出願2020-117406)」か、出願中なら「出願2020117406」
+      var n = m[4].match(/^([^()]+)(?:\(出願([\d-]+)\))?$/) || [0, m[4], ''];
+      var app = (n[2] || (m[3] === '出願' ? n[1] : '')).replace(/-/g, '');
+      cur.lines.push({ how: m[1], mark: m[2], kind: m[3], num: n[1], app: /^\d{10}$/.test(app) ? app.slice(0, 4) + '-' + app.slice(4) : '', cls: m[5], owner: m[6] || '', why: m[7] || '' });
     });
     return blocks;
   }
@@ -134,7 +152,9 @@
         td.appendChild(el('span', 'sh-how ' + (l.how.indexOf('文字') === 0 ? 'moji' : 'yomi'), l.how));
         tr.appendChild(td);
         tr.appendChild(el('td', 'mk', l.mark));
-        tr.appendChild(el('td', 'num', l.kind + ' ' + l.num));
+        var tn = el('td', 'num');
+        if (l.app) { var ja = el('a', '', l.kind + ' ' + l.num); ja.href = JPP + l.app + '/40/ja'; ja.target = '_blank'; ja.rel = 'noopener'; ja.title = '特許庁のページ(J-PlatPat)で実物を見る'; tn.appendChild(ja); } else tn.textContent = l.kind + ' ' + l.num;
+        tr.appendChild(tn);
         tr.appendChild(el('td', 'num', '第' + l.cls + '類'));
         tr.appendChild(el('td', '', l.owner));
         tr.appendChild(el('td', '', l.why.replace(/^指定商品に/, '').replace(/^指定商品が/, '')));
@@ -146,6 +166,60 @@
     var ok = g.blocks.filter(function (b) { return g.hot.indexOf(b) < 0; });
     if (ok.length) wrap.appendChild(el('p', 'sh-own', '同じ商品名の中のほかの名前: ' + ok.map(function (b) { return b.name + '(' + b.lv + ')'; }).join('、')));
     return wrap;
+  }
+
+  /** 侵害になるかを見る3つの点について、このカードで分かっていることと、人が見ることを並べる */
+  function hints(g) {
+    var lines = []; g.hot.forEach(function (b) { b.lines.forEach(function (l) { if (!l.raw) lines.push(l); }); });
+    var box = el('div', 'sh-hint');
+    box.appendChild(el('div', 'sh-hint-h', '判断の手がかり(侵害になるのは、①②③がすべて当てはまるとき)'));
+    if (!lines.length) { box.appendChild(el('p', 'sh-hint-p', '根拠の行が読めませんでした。「商標_内容」を見てください。')); return box; }
+    var moji = lines.some(function (l) { return l.how.indexOf('文字') === 0; });
+    var goods = []; lines.forEach(function (l) { var s = '第' + l.cls + '類 ' + l.why.replace(/^指定商品に/, '').replace(/^指定商品が/, ''); if (goods.indexOf(s) < 0) goods.push(s); });
+    var old = lines.some(function (l) { return l.why.indexOf('古い登録') >= 0; });
+    var t = el('table', 'sh-hint-t'), hr = el('tr');
+    ['見る点', 'このカードで分かっていること', '人が見ること'].forEach(function (h) { hr.appendChild(el('th', '', h)); });
+    t.appendChild(hr);
+    [
+      ['① 商標が似ているか',
+        moji ? '文字が同じです(ひらがな・カタカナ・記号の違いは除く)。似ていると判断されやすい側です。' : '読みが同じです。文字は違います。',
+        moji ? '相手の商標の実物を見て、ロゴやほかの言葉と組になっていないかを確かめます。' : '相手の商標は、別の言葉と組になっていることがあります(読みの一部だけが同じ、など)。実物を見て、全体として似ているかを確かめます。'],
+      ['② 商品が似ているか',
+        '相手の指定商品: ' + goods.join('、') + (old ? '(古い登録は指定商品が読み取れていません)' : ''),
+        '下の商品が、相手の指定商品と同じ種類の商品かを見ます。区分が同じでも、商品の種類が違えば当てはまりません。'],
+      ['③ 商標として使っているか',
+        '商品名に入っています(下の一覧)。',
+        'シリーズ名・愛称として使っているなら当てはまります。加工や仕様の説明として書いているだけなら当てはまりません。']
+    ].forEach(function (x) { var tr = el('tr'); tr.appendChild(el('td', 'k', x[0])); tr.appendChild(el('td', '', x[1])); tr.appendChild(el('td', '', x[2])); t.appendChild(tr); });
+    box.appendChild(t);
+    box.appendChild(el('p', 'sh-hint-p', 'あわせて見ること: 相手がその商標を実際に使っているか(3年以上使っていなければ、取り消しを求められます)。コラボ相手の商標なら、契約で使える範囲に入っているか。'));
+    return box;
+  }
+
+  /** 共通の手引き(たたんである) */
+  function manual() {
+    var d = el('details', 'sh-man'); d.open = !!state.man;
+    d.ontoggle = function () { state.man = d.open; };
+    d.appendChild(el('summary', '', '判断のしかた(商標法の考え方)を読む'));
+    var add = function (h, items) { d.appendChild(el('h4', '', h)); var ul = el('ul'); items.forEach(function (x) { ul.appendChild(el('li', '', x)); }); d.appendChild(ul); };
+    add('侵害になるのは、次の3つがすべて当てはまるとき', [
+      '① 商標が同じか、似ている … 見た目・読み・意味の3つを合わせて、買う人が出どころを取り違えるかで見ます。',
+      '② 商品が同じか、似ている … 相手が登録した「指定商品」と、こちらの商品が同じ種類かで見ます。',
+      '③ 商標として使っている … 商品の出どころを示す目印として使っている場合です。説明や飾りとして書いているだけなら当てはまりません。'
+    ]);
+    add('この画面の「警告」「要確認」の意味', [
+      '警告 … 文字が同じ商標が、こちらの商品の種類に合う区分・指定商品で登録されています。①と②に当てはまる見込みが高いので、先に見てください。',
+      '要確認 … 読みだけが同じ、または指定商品が読み取れない古い登録です。実物を見て判断が要ります。',
+      'どちらも「同じ名前の商標が見つかった」という知らせで、侵害の判定ではありません。似た名前(1文字違いなど)、ロゴの見た目、海外の商標は調べていません。'
+    ]);
+    add('当てはまっても、侵害にならないことがある場合', [
+      '相手が3年以上その商標を使っていない(取り消しを求められます)。',
+      'こちらが相手の出願より前から使っていて、広く知られていた(使い続けられることがあります。証明は難しいです)。',
+      'コラボ相手の商標で、契約で使ってよい範囲に入っている。'
+    ]);
+    add('危ないと分かったときの選択肢', ['名前を変える。', '相手に確認して、使ってよいという同意をもらう。', '相手が使っていなければ、取り消しを求める。', '自社で出願する(審査で、似ていると判断されるかが分かります)。']);
+    d.appendChild(el('p', 'sh-hint-p', '最終判断は、法務・弁理士に確認してください。確認した結果は「人の確認」と「確認メモ」に残します。'));
+    return d;
   }
 
   function selectOf(value) {
@@ -161,6 +235,7 @@
     head.appendChild(el('span', 'sh-tag', g.todo === 0 ? '人の確認ずみ' : '未確認 ' + g.todo + '件'));
     c.appendChild(head);
     c.appendChild(evidence(g));
+    c.appendChild(hints(g));
 
     // カードごとにまとめて付ける(押す→確かめる→付ける の2段階)
     var bulk = el('div', 'sh-bulk'), sel = selectOf('問題なし'), memo = el('input'), go = el('button', 'sh-btn', 'この' + g.rows.length + '件にまとめて付ける'), msg = el('span', 'sh-msg');
@@ -220,6 +295,7 @@
     var sw = el('a', '', 'キントーンの表で見る'); sw.href = '#';
     sw.onclick = function (e) { e.preventDefault(); var on = document.body.classList.toggle('bcr-shohyo-on'); sw.textContent = on ? 'キントーンの表で見る' : 'まとめた表示に戻す'; };
     note.appendChild(sw); root.appendChild(note);
+    root.appendChild(manual());
 
     var list = all.filter(function (g) { return state.only === 'todo' ? g.todo > 0 : state.only === 'warn' ? g.lv === '警告' : true; });
     if (!list.length) { root.appendChild(el('div', 'sh-empty', rows.length ? 'この条件に当てはまるものはありません。' : '警告・要確認の商品はありません。')); return; }
