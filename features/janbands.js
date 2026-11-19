@@ -169,7 +169,7 @@
         el('td', { text: b.note || '', style: 'font-size:12px;color:#52606d' }),
         el('td', {}, d.canEdit ? el('button', { type: 'button', title: 'この企業コードの状態・使わない番号・メモを直す', text: '直す', on: { click: function () { st.edit = Object.assign({}, b, { mode: 'edit' }); st.msg = ''; draw(); } } }) : null)));
     });
-    win.append(el('table', {}, el('thead', {}, el('tr', {}, ['番号の名前', '企業コード', '状態', '', '使った / 使える', '残り', '穴', '受け取った日', 'メモ', ''].map(function (h) { return el('th', { text: h }); }))), tb));
+    win.append(el('table', {}, el('thead', {}, el.apply(null, ['tr', {}].concat(['番号の名前', '企業コード', '状態', '', '使った / 使える', '残り', '穴', '受け取った日', 'メモ', ''].map(function (h) { return el('th', { text: h }); })))), tb));
 
     if (d.canEdit) win.append(form(d));
     else win.append(el('p', { cls: 'jb-note', text: '企業コードの登録・変更は管理者だけができます。' }));
