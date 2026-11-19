@@ -186,7 +186,8 @@
   }
 
   // JANマスターにある、まだ登録していない企業コード。状態を選んでまとめて登録できる
-  function guess(u) { return !u.jp ? '他社' : u.leftover === 0 || u.max >= 999 ? '使い切り' : '予備'; }
+  // 状態の初めの選びは目安: 自社の番号は000から詰めて使うので「使った数 ≒ 一番大きい番号」。まばらなもの(OEM・他社の商品)は他社にしておく
+  function guess(u) { var dense = u.count >= u.max * 0.8; return !u.jp || !dense ? '他社' : u.leftover <= 1 ? '使い切り' : '予備'; }
   function unknownList(d) {
     var ul = el('tbody'), sel = {};
     d.unknown.forEach(function (u) {
@@ -214,7 +215,7 @@
           send({ op: 'addmany', bands: list }).then(function () { list.forEach(function (x) { delete st.pick[x.prefix]; }); });
         } } }),
       el('span', { cls: 'jb-note', style: 'margin:0', text: '自社の企業コードは「予備」(残りを合計に足す)か「使い切り」、自社のでないものは「他社」(数えない)にしてください。' })) : null;
-    return el('details', { open: true }, el('summary', { text: 'JANマスターにある、登録していない企業コード ' + d.unknown.length + '件' }), bulk, el('table', {}, el('thead', {}, head), ul));
+    return el('details', { open: true }, el('summary', { text: 'JANマスターにある、登録していない企業コード ' + d.unknown.length + '件(OEM・ラブライブ！など他社の番号も混ざっています。状態の初めの選びは目安なので確かめてから登録してください)' }), bulk, el('table', {}, el('thead', {}, head), ul));
   }
 
   function form(d) {
