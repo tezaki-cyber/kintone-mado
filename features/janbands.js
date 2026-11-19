@@ -12,8 +12,8 @@
   if (!window.BCR_MADO) return;
   var ID = 'bcr-janbands';
   var API = 'https://us-central1-event-goods-database.cloudfunctions.net/fuku_api';
-  var STATUSES = ['使用中', '予備', '使い切り', '使用不可'];
-  var st = { data: null, busy: false, counting: false, edit: null, err: '' };
+  var STATUSES = ['使用中', '予備', '使い切り', '使用不可', '他社'];
+  var st = { data: null, busy: false, counting: false, edit: null, err: '', pick: {} };
 
   var CSS = [
     '#' + ID + '-bar { display: inline-flex; align-items: center; gap: 10px; margin: 6px 0 6px 12px; font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-size: 13px; color: #1f2933; }',
@@ -50,6 +50,10 @@
     '#' + ID + ' .jb-st.s0 { background: #1f2933; color: #fff; border-color: #1f2933; }',
     '#' + ID + ' .jb-st.s1 { background: #f1f8f1; color: #1b5e20; border-color: #a5d6a7; }',
     '#' + ID + ' .jb-st.s3 { background: #fdf1f1; color: #a31515; border-color: #e3a5a5; }',
+    '#' + ID + ' .jb-st.s4 { background: #f4f5f7; color: #7b8794; border-style: dashed; }',
+    '#' + ID + ' .jb-auto { display: block; font-size: 11px; color: #7b8794; }',
+    '#' + ID + ' td select { font: inherit; font-size: 13px; padding: 2px 4px; border: 1px solid #c5ccd3; border-radius: 4px; }',
+    '#' + ID + ' .jb-bulk { display: flex; gap: 10px; align-items: center; margin: 8px 0; flex-wrap: wrap; font-size: 13px; }',
     '#' + ID + ' .jb-meter { width: 160px; height: 10px; border-radius: 5px; background: #e4e7eb; overflow: hidden; }',
     '#' + ID + ' .jb-meter i { display: block; height: 100%; background: #52606d; }',
     '#' + ID + ' h3 { font-size: 15px; margin: 22px 0 8px; }',
@@ -98,8 +102,8 @@
     var d = st.data;
     if (!d) { b.append(el('span', { cls: 'jb-pill', text: 'JANの残りを数えています…' })); return; }
     var act = (d.bands || []).filter(function (x) { return x.status === '使用中'; }).map(function (x) { return x.label || x.prefix; }).join('・');
-    b.append(el('span', { cls: 'jb-pill ' + d.level, title: '使用中と予備の企業コードで、あと出せる JAN の数', text: 'JANの残り ' + n(d.total) + '件' }),
-      el('span', { text: (act ? '使用中: ' + act : '') + (d.nextJan ? ' / 次の番号 ' + d.nextJan : '') }),
+    b.append(el('span', { cls: 'jb-pill ' + d.level, title: '使用中と予備の企業コードを合わせて、あと出せる JAN の数', text: 'JANの残り 合計 ' + n(d.total) + '件' }),
+      el('span', { text: (act ? '使用中: ' + act + ' 残り' + n(d.active) : '') + (d.spareCount ? ' ・ 予備 ' + d.spareCount + 'コード ' + n(d.spare) + '件' : ' ・ 予備なし') + (d.nextJan ? ' / 次の番号 ' + d.nextJan : '') }),
       el('button', { type: 'button', title: '企業コードごとの使った数・残りを見る。新しくもらった企業コードはここで登録する', text: '企業コードの状況・登録', on: { click: openWin } }));
   }
 
@@ -144,12 +148,15 @@
     win.append(el('div', { cls: 'jb-sum' },
       el('div', { cls: 'jb-box ' + (d.level || '') }, el('b', { text: n(d.total) + '件' }), el('span', { text: 'あと出せる JAN(使用中＋予備)・' + (LEVEL[d.level] || '') })),
       el('div', { cls: 'jb-box' }, el('b', { text: n(d.active) + '件' }), el('span', { text: '使用中の企業コードの残り' + (act.length ? '(' + act.map(function (x) { return x.label || x.prefix; }).join('・') + ')' : '') })),
+      el('div', { cls: 'jb-box' }, el('b', { text: n(d.spare) + '件' }), el('span', { text: '予備の企業コードの残り(' + (d.spareCount || 0) + 'コード)' })),
       el('div', { cls: 'jb-box' }, el('b', { text: d.nextJan || '—', style: 'font-size:20px' }), el('span', { text: '次に出る番号' }))));
     win.append(el('p', { cls: 'jb-note' },
       '数えた時刻 ' + (d.usageAt || '—') + '(JANマスターの ' + n(d.count855) + '件から) ',
       el('button', { type: 'button', title: 'JANマスターを全部読み直して数え直す(30〜50秒かかります)', disabled: st.counting, text: st.counting ? '数え直しています…' : '最新に数え直す', on: { click: recount } }),
       el('br'),
-      '残りは「その企業コードで使われている一番大きい番号より後ろ」の数です。途中の空き(穴)と、使わない番号(000・392〜426・819 など)は数えません。黄色の知らせは残り ' + n(d.warn) + '件未満、赤は ' + n(d.danger) + '件未満で、進捗表の上にも出ます。'));
+      '残りは「その企業コードで使われている一番大きい番号より後ろ」の数です。途中の空き(穴)と、使わない番号(000・392〜426・819 など)は数えません。黄色の知らせは合計の残りが ' + n(d.warn) + '件未満、赤は ' + n(d.danger) + '件未満で、進捗表の上にも出ます。',
+      el('br'),
+      '使用中の企業コードを使い切ると、予備のうち「使う順」が一番小さい企業コードが自動で使用中になり、次の番号もそちらに移ります(数え直したときと、登録・変更のあとに確かめます)。'));
     if (!st.data && !st.err) win.append(el('div', { cls: 'jb-msg', text: '読み込んでいます…' }));
     if (st.err) win.append(el('div', { cls: 'jb-msg err', text: st.err }));
     else if (st.msg) win.append(el('div', { cls: 'jb-msg', text: st.msg }));
@@ -160,29 +167,54 @@
       tb.append(el('tr', { cls: si >= 2 ? 'dim' : '' },
         el('td', { text: b.label || '' }),
         el('td', { cls: 'code', text: b.prefix }),
-        el('td', {}, el('span', { cls: 'jb-st s' + si, text: b.status })),
+        el('td', {}, el('span', { cls: 'jb-st s' + si, text: b.status }), b.autoAt ? el('span', { cls: 'jb-auto', text: '自動 ' + b.autoAt }) : null),
         el('td', {}, el('div', { cls: 'jb-meter', title: n(used) + ' / ' + n(cap) + '件' }, el('i', { style: 'width:' + Math.min(100, Math.round(used / cap * 100)) + '%' }))),
         el('td', { cls: 'num', text: n(used) + ' / ' + n(cap) }),
         el('td', { cls: 'num', text: si < 2 ? n(b.remaining) : '—' }),
+        el('td', { cls: 'num', title: '予備の中で、小さいものから先に使います', text: si < 2 ? String(b.order != null ? b.order : '') : '' }),
         el('td', { cls: 'num', title: '使われている一番大きい番号より前の空き。発番には使いません', text: b.holes ? n(b.holes) : '' }),
         el('td', { text: b.got || '' }),
         el('td', { text: b.note || '', style: 'font-size:12px;color:#52606d' }),
         el('td', {}, d.canEdit ? el('button', { type: 'button', title: 'この企業コードの状態・使わない番号・メモを直す', text: '直す', on: { click: function () { st.edit = Object.assign({}, b, { mode: 'edit' }); st.msg = ''; draw(); } } }) : null)));
     });
-    win.append(el('table', {}, el('thead', {}, el.apply(null, ['tr', {}].concat(['番号の名前', '企業コード', '状態', '', '使った / 使える', '残り', '穴', '受け取った日', 'メモ', ''].map(function (h) { return el('th', { text: h }); })))), tb));
+    win.append(el('table', {}, el('thead', {}, el.apply(null, ['tr', {}].concat(['番号の名前', '企業コード', '状態', '', '使った / 使える', '残り', '使う順', '穴', '受け取った日', 'メモ', ''].map(function (h) { return el('th', { text: h }); })))), tb));
 
     if (d.canEdit) win.append(form(d));
     else win.append(el('p', { cls: 'jb-note', text: '企業コードの登録・変更は管理者だけができます。' }));
 
-    if (d.unknown && d.unknown.length) {
-      var ul = el('tbody');
-      d.unknown.forEach(function (u) {
-        ul.append(el('tr', {}, el('td', { cls: 'code', text: u.prefix }), el('td', { cls: 'num', text: n(u.count) + '件' }),
-          el('td', {}, d.canEdit ? el('button', { type: 'button', title: 'この企業コードを登録する(自社の企業コードのときだけ)', text: '登録する', on: { click: function () { st.edit = { mode: 'add', prefix: u.prefix, status: '使い切り', skip: '000' }; draw(); } } }) : null)));
-      });
-      win.append(el('details', {}, el('summary', { text: 'JANマスターにある、登録していない企業コード ' + d.unknown.length + '件(OEM・ラブライブ！など他社の番号が多い)' }),
-        el('table', {}, ul)));
-    }
+    if (d.unknown && d.unknown.length) win.append(unknownList(d));
+  }
+
+  // JANマスターにある、まだ登録していない企業コード。状態を選んでまとめて登録できる
+  function guess(u) { return !u.jp ? '他社' : u.leftover === 0 || u.max >= 999 ? '使い切り' : '予備'; }
+  function unknownList(d) {
+    var ul = el('tbody'), sel = {};
+    d.unknown.forEach(function (u) {
+      var p = st.pick[u.prefix] || (st.pick[u.prefix] = { on: false, status: guess(u) });
+      var chk = el('input', { type: 'checkbox', checked: p.on, title: 'まとめて登録するときに選ぶ', on: { change: function () { p.on = chk.checked; } } });
+      var s = el('select', { on: { change: function () { p.status = s.value; } } });
+      STATUSES.forEach(function (x) { if (x !== '使用不可') s.append(el('option', { value: x, text: x, selected: p.status === x })); });
+      sel[u.prefix] = p;
+      ul.append(el('tr', {},
+        el('td', {}, d.canEdit ? chk : null),
+        el('td', { cls: 'code', text: u.prefix }),
+        el('td', { cls: 'num', text: n(u.count) + '件' }),
+        el('td', { cls: 'num', title: '使われている一番大きい番号', text: String(u.max).padStart(3, '0') }),
+        el('td', { cls: 'num', title: '一番大きい番号より後ろ(000 以外は使える前提。登録のあと「直す」で使わない番号を入れられます)', text: n(u.leftover) }),
+        el('td', {}, d.canEdit ? s : null),
+        el('td', {}, d.canEdit ? el('button', { type: 'button', title: 'この企業コードを、名前・使わない番号なども入れて1件だけ登録する', text: '詳しく登録', on: { click: function () { st.edit = { mode: 'add', prefix: u.prefix, status: p.status, skip: '000', label: '' }; draw(); var f = document.querySelector('#' + ID + ' .jb-form'); if (f) f.scrollIntoView({ block: 'center' }); } } }) : null)));
+    });
+    var head = el.apply(null, ['tr', {}].concat(['', '企業コード', '使った数', '一番大きい番号', '後ろの残り', '登録するときの状態', ''].map(function (h) { return el('th', { text: h }); })));
+    var bulk = d.canEdit ? el('div', { cls: 'jb-bulk' },
+      el('button', { type: 'button', title: '全部にチェックを付ける', text: '全部選ぶ', on: { click: function () { d.unknown.forEach(function (u) { st.pick[u.prefix].on = true; }); draw(); } } }),
+      el('button', { type: 'button', cls: 'pri', disabled: st.busy, title: 'チェックした企業コードを、選んだ状態でまとめて登録する。JANマスターのレコードは変えません', text: '選んだものをまとめて登録',
+        on: { click: function () {
+          var list = d.unknown.filter(function (u) { return sel[u.prefix].on; }).map(function (u) { return { prefix: u.prefix, status: sel[u.prefix].status, skip: '000' }; });
+          if (!list.length) { st.err = '登録する企業コードにチェックを付けてください'; draw(); return; }
+          send({ op: 'addmany', bands: list }).then(function () { list.forEach(function (x) { delete st.pick[x.prefix]; }); });
+        } } }),
+      el('span', { cls: 'jb-note', style: 'margin:0', text: '自社の企業コードは「予備」(残りを合計に足す)か「使い切り」、自社のでないものは「他社」(数えない)にしてください。' })) : null;
+    return el('details', { open: true }, el('summary', { text: 'JANマスターにある、登録していない企業コード ' + d.unknown.length + '件' }), bulk, el('table', {}, el('thead', {}, head), ul));
   }
 
   function form(d) {
@@ -195,7 +227,8 @@
       got: el('input', { type: 'date', value: e.got || '' }),
       status: el('select', {}),
       skip: el('input', { value: e.skip != null ? e.skip : (last.skip || '000'), placeholder: '例 000,392-426,819' }),
-      note: el('input', { value: e.note || '', placeholder: '例 2026年度の申請分' })
+      note: el('input', { value: e.note || '', placeholder: '例 2026年度の申請分' }),
+      order: el('input', { type: 'number', value: e.order != null ? e.order : '', placeholder: adding ? '空なら一番後ろ' : '' })
     };
     STATUSES.forEach(function (s) { f.status.append(el('option', { value: s, text: s, selected: (e.status || '予備') === s })); });
     var prev = el('div', { cls: 'jb-prev' });
@@ -222,12 +255,13 @@
         el('label', {}, '番号の名前', f.label),
         el('label', {}, '受け取った日', f.got),
         el('label', {}, '状態', f.status),
+        el('label', { title: '予備の企業コードは、この数が小さいものから順に使います' }, '使う順(小さいほど先)', f.order),
         el('label', { cls: 'wide' }, '使わない番号(今までの企業コードと同じ決まりを入れてあります)', f.skip),
         el('label', { cls: 'wide' }, 'メモ', f.note),
         prev,
         el('div', { cls: 'jb-acts' },
           el('button', { type: 'button', cls: 'pri', disabled: st.busy, title: adding ? 'この企業コードを一覧に足す。JANマスターのレコードは変えません' : '状態・使わない番号・メモを保存する', text: st.busy ? '保存しています…' : adding ? '登録する' : '保存する',
-            on: { click: function () { send({ op: adding ? 'add' : 'edit', band: { prefix: f.prefix.value, label: f.label.value, got: f.got.value, status: f.status.value, skip: f.skip.value, note: f.note.value } }); } } }),
+            on: { click: function () { send({ op: adding ? 'add' : 'edit', band: { prefix: f.prefix.value, label: f.label.value, got: f.got.value, status: f.status.value, skip: f.skip.value, note: f.note.value, order: f.order.value } }); } } }),
           !adding || st.edit ? el('button', { type: 'button', title: '入力をやめる', text: 'やめる', on: { click: function () { st.edit = null; draw(); } } }) : null)),
       el('h3', { text: '知らせる数' }),
       el('div', { cls: 'jb-form' },
