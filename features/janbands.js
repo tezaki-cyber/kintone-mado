@@ -25,7 +25,7 @@
     '#' + ID + '-bar button:hover, #' + ID + ' button:hover { background: #f0f4f8; }',
     '#' + ID + ' button.pri { background: #1f2933; color: #fff; border-color: #1f2933; }',
     '#' + ID + ' button:disabled { opacity: .5; cursor: default; }',
-    '#' + ID + ' { position: fixed; inset: 0; z-index: 10000; background: rgba(15,23,32,.45); display: flex; align-items: flex-start; justify-content: center; padding: 32px 16px; overflow: auto; font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; color: #1f2933; line-height: 1.6; }',
+    '#' + ID + ' { position: fixed; inset: 0; z-index: 100000; background: rgba(15,23,32,.45); display: flex; align-items: flex-start; justify-content: center; padding: 32px 16px; overflow: auto; font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; color: #1f2933; line-height: 1.6; }',
     '#' + ID + ' * { box-sizing: border-box; }',
     '#' + ID + ' .jb-win { background: #fff; border-radius: 10px; width: min(1080px, 100%); padding: 20px 24px 28px; box-shadow: 0 10px 40px rgba(0,0,0,.25); }',
     '#' + ID + ' .jb-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }',
