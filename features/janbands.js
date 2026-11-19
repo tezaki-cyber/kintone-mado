@@ -89,6 +89,7 @@
 
   // ---- 一覧の上の1行 ----
   function bar() {
+    try { if (kintone.app.getId() !== 855) return; } catch (e) { return; }
     var host = kintone.app.getHeaderMenuSpaceElement();
     if (!host) return;
     var b = document.getElementById(ID + '-bar');
@@ -149,6 +150,7 @@
       el('button', { type: 'button', title: 'JANマスターを全部読み直して数え直す(30〜50秒かかります)', disabled: st.counting, text: st.counting ? '数え直しています…' : '最新に数え直す', on: { click: recount } }),
       el('br'),
       '残りは「その企業コードで使われている一番大きい番号より後ろ」の数です。途中の空き(穴)と、使わない番号(000・392〜426・819 など)は数えません。黄色の知らせは残り ' + n(d.warn) + '件未満、赤は ' + n(d.danger) + '件未満で、進捗表の上にも出ます。'));
+    if (!st.data && !st.err) win.append(el('div', { cls: 'jb-msg', text: '読み込んでいます…' }));
     if (st.err) win.append(el('div', { cls: 'jb-msg err', text: st.err }));
     else if (st.msg) win.append(el('div', { cls: 'jb-msg', text: st.msg }));
 
@@ -239,12 +241,27 @@
     call({ action: 'jan_bands_get' }).then(function (d) {
       st.data = d; bar(); draw();
       if (d.stale && document.getElementById(ID)) recount();
-    }).catch(function (e) { try { console.warn('[BCR窓口] janbands: ' + e.message); } catch (x) { /* 黙る */ } var b = document.getElementById(ID + '-bar'); if (b) b.remove(); });
+    }).catch(function (e) {
+      try { console.warn('[BCR窓口] janbands: ' + e.message); } catch (x) { /* 黙る */ }
+      var b = document.getElementById(ID + '-bar'); if (b) b.remove();
+      st.err = '読めませんでした: ' + e.message; draw();
+    });
   }
+
+  // 進捗表(867)の表の「JANの残り」から開けるようにする。進捗表では一覧の上の1行は出さない
+  window.BCR_JANBANDS = {
+    open: function () {
+      if (!document.getElementById(ID + '-css')) document.head.appendChild(el('style', { id: ID + '-css', text: CSS }));
+      openWin();
+      if (!st.data) load();
+    }
+  };
 
   BCR_MADO.feature('janbands', {
     'app.record.index.show': function () {
       if (!document.getElementById(ID + '-css')) document.head.appendChild(el('style', { id: ID + '-css', text: CSS }));
+      var app; try { app = kintone.app.getId(); } catch (e) { return; }
+      if (app !== 855) return;
       bar();
       if (!st.data) load();
     }

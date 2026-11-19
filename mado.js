@@ -13,13 +13,13 @@
 (function () {
   'use strict';
   if (window.BCR_MADO) return;                 // 二重に登録されても1回だけ動く
-  var VERSION = '2026-11-19.1';                // 機能を更新したら変える(古い読み置きを使わせないため)
+  var VERSION = '2026-11-19.2';                // 機能を更新したら変える(古い読み置きを使わせないため)
 
   // 機能の一覧。apps=動かすアプリ番号 / events=動かす画面 / views=一覧の名前(一覧の画面のときだけ見る。空ならどの一覧でも)
   var FEATURES = [
     { id: 'fukushizai', on: true, apps: [867], events: ['app.record.index.show'], views: [], src: 'features/fukushizai.js' },                     // 進捗表:表の道具列「カートンを作る」から開く
     { id: 'shohyo', on: true, apps: [867], events: ['app.record.index.show'], views: ['商標チェック'], src: 'features/shohyo.js' },                    // 進捗表:一覧「商標チェック」を根拠ごとのカードで見やすく出す
-    { id: 'janbands', on: true, apps: [855], events: ['app.record.index.show'], views: [], src: 'features/janbands.js' },                          // JANマスター:一覧の上に企業コードの残りと「企業コードの状況・登録」
+    { id: 'janbands', on: true, apps: [855, 867], events: ['app.record.index.show'], views: [], src: 'features/janbands.js' },                     // JANマスター:一覧の上に企業コードの残りと「企業コードの状況・登録」/ 進捗表:表の「JANの残り」から同じ小窓
     { id: 'fukushizai', on: true, apps: [852], events: ['app.record.index.show'], views: ['副資材・カートン'], src: 'features/fukushizai.js' }   // 商品管理表(使わなくなる予定)
   ];
 
