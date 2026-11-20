@@ -24,7 +24,7 @@
   var SOURCES = {
     852: { label: '商品管理表', f: { name: '商品名', jan: 'JANコード', price: '税込価格', cat: '商品カテゴリ', seizo: '製造先', box: 'BOX入数', carton: 'カートン入数', hanro: '販路' }, alt: {}, base: '' },
     867: { label: '進捗表', f: { name: '商品名', jan: 'JANコード', price: '', cat: '商品カテゴリ', seizo: '製造工場', box: '', carton: '', hanro: '販路' },
-           alt: { name: 'シート_商品名', jan: 'シート_JAN', price: 'シート_税込', seizo: 'シート_製造先', box: 'シート_BOX入数', carton: 'シート_入り数', hanro: 'シート_販路', holder: 'シート_権利元' }, base: '商品名 != ""' }
+           alt: { name: 'シート_商品名', jan: 'シート_JAN', price: 'シート_税込', seizo: 'シート_製造先', box: 'シート_BOX入数', carton: 'シート_入り数', hanro: 'シート_販路', holder: 'シート_権利元', tab: 'シート_進捗タブ' }, base: '商品名 != ""' }
   };
   var SRC = SOURCES[APP] || SOURCES[852];
   var F = SRC.f;
@@ -44,7 +44,7 @@
     var sheet = !val(r, SRC.f.name).trim() && !!val(r, SRC.alt.name).trim();   // スプレッドシート由来の行
     return { id: +r.$id.value, name: pick('name'), jan: pick('jan').normalize('NFKC').replace(/[^0-9]/g, ''), priceIn: digits(pick('price')), category: val(r, F.cat),
              seizo: pick('seizo').normalize('NFKC'), box: digits(pick('box')), carton: /^[0-9,]+$/.test(pick('carton').normalize('NFKC')) ? digits(pick('carton')) : '',
-             hanro: pick('hanro') || (sheet ? '一般' : ''), holder: pick('holder') };
+             hanro: pick('hanro') || (sheet ? (pick('tab') === 'カプセル' ? 'カプセル' : '一般') : ''), holder: pick('holder') };   // シート由来で販路が空の行は、進捗表のタブ(シート_進捗タブ)が「カプセル」ならカプセル
   }
   var isInt = function (v) { v = String(v).trim().normalize('NFKC'); return /^[0-9]+$/.test(v) && +v > 0; };
   var chunk = function (a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
