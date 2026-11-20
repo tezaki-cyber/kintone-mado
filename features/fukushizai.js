@@ -245,10 +245,27 @@
         return '<div class="card ' + (e.saved ? 'ready' : 'todo') + '"><div class="ttl"><b>' + KIND[k] + '</b><span class="sv ' + (e.saved ? 'ok' : 'mid') + '">' + (e.saved ? '保存済み' : '作成済み・未保存') + '</span></div>' +
           '<div class="line">作成：' + esc(md(e.at)) + (e.by ? ' ' + esc(e.by) + 'さん' : '') + '<br>保存：' + (e.saved ? esc(md(e.saved)) + (e.where ? ' 保存先「' + esc(e.where) + '」' : '') : 'まだ保存していません') + '</div>' +
           (url ? '<div class="line vf"><a href="' + esc(url + '.pdf') + '" target="_blank">PDF を開く</a><a class="vai" data-k="' + k + '" href="' + esc(url + '.ai') + '" download="' + esc(e.n) + '.ai">AI を保存</a></div>'
-               : '<div class="line na">この版のファイルの写しは残っていません。作り直すと開けるようになります</div>') + '</div>';
+               : '<div class="line na">この版のファイルの写しは残っていません。作り直すと開けるようになります</div>') +
+          '<div class="line vdel"><button type="button" class="small vun" data-k="' + k + '" title="まちがえて作ったときに、この商品の「' + KIND[k] + '」の作成済みの印を消します。保存したファイルとサーバーの写しは消えません">この印を消す(まちがえて作ったとき)</button></div></div>';
       }).join('') + '<div class="vhint">ファイルは、作ったときの写しをサーバーから開きます(保存したものと同じ中身です)。保存先のフォルダそのものは、ブラウザからは開けません。</div>' +
         '<button type="button" class="vremake">この商品の副資材・カートンを作る(作り直す)</button>';
       $('.vremake').onclick = function () { open([id]); };
+      // 印を消す:押すとその場で「本当に消す/やめる」に変わる(確かめの小窓は出さない)
+      $$('.vun').forEach(function (b) {
+        b.onclick = function () {
+          var k = b.dataset.k, box = b.parentNode;
+          box.innerHTML = '<span class="vask">「' + esc(KIND[k]) + '」の作成済みの印を消します。保存したファイルは消えません。</span> ' +
+            '<button type="button" class="small vyes" title="この商品の「' + esc(KIND[k]) + '」の作成済みの印を消します">消す</button> <button type="button" class="small vno" title="消さずに戻ります">やめる</button>';
+          box.querySelector('.vno').onclick = draw;
+          box.querySelector('.vyes').onclick = function () {
+            this.disabled = true;
+            call('unmark', { id: String(id), kind: k }).then(function () {
+              if (stat[id]) { delete stat[id][k]; if (!Object.keys(stat[id]).length) delete stat[id]; }
+              told(); draw(); msg('「' + KIND[k] + '」の作成済みの印を消しました', 'good');
+            }, fail);
+          };
+        };
+      });
       $$('.vai').forEach(function (a) {
         a.addEventListener('click', function () { markSaved([{ id: id, kind: a.dataset.k, name: s[a.dataset.k].n }], '1つずつ受け取り').then(draw, function () {}); });
       });
