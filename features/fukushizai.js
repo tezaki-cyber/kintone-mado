@@ -669,7 +669,7 @@
     var tot = card.querySelector('.total');
     if (tot) {
       var g = function (k) { return it.kinds.carton.fields.filter(function (f) { return f[0] === k; })[0][2]; };
-      tot.textContent = isInt(g('perBag')) && isInt(g('bags')) ? '＝ 合計 ' + (+String(g('perBag')).normalize('NFKC') * +String(g('bags')).normalize('NFKC')) + ' 個入り' : '';
+      tot.textContent = isInt(g('perBag')) && isInt(g('bags')) ? '＝ 合計 ' + (+String(g('perBag')).normalize('NFKC') * +String(g('bags')).normalize('NFKC')) + ' 個入り' : (isInt(g('perBag')) && !String(g('bags') || '').trim() ? '(2つ目が空なら、合計とその数を空けて作ります。手で書き込む用)' : '');   // 2026-11-25 BOXTOY は問屋で BOX数が違う
     }
     foot1();
   }
