@@ -24,7 +24,7 @@
   var SOURCES = {
     852: { label: '商品管理表', f: { name: '商品名', jan: 'JANコード', price: '税込価格', cat: '商品カテゴリ', seizo: '製造先', box: 'BOX入数', carton: 'カートン入数', hanro: '販路' }, alt: {}, base: '' },
     867: { label: '進捗表', f: { name: '商品名', jan: 'JANコード', price: '', cat: '商品カテゴリ', seizo: '製造工場', box: '', carton: '', hanro: '販路' },
-           alt: { name: 'シート_商品名', jan: 'シート_JAN', price: 'シート_税込', seizo: 'シート_製造先', box: 'シート_BOX入数', carton: 'シート_入り数', hanro: 'シート_販路', holder: 'シート_権利元', tab: 'シート_進捗タブ' }, base: '商品名 != ""' }
+           alt: { name: 'シート_商品名', jan: 'シート_JAN', price: 'シート_税込', seizo: 'シート_製造先', box: 'シート_BOX入数', carton: 'シート_入り数', hanro: 'シート_販路', holder: 'シート_権利元', tab: 'シート_進捗タブ', prize: 'シート_プライズコード' }, base: '商品名 != ""' }
   };
   var SRC = SOURCES[APP] || SOURCES[852];
   var F = SRC.f;
@@ -39,10 +39,17 @@
   var val = function (rec, code) { return code && rec[code] && rec[code].value != null ? String(rec[code].value) : ''; };
   var READ = ['$id'].concat(Object.keys(SRC.f).map(function (k) { return SRC.f[k]; }), Object.keys(SRC.alt).map(function (k) { return SRC.alt[k]; })).filter(Boolean);
   var digits = function (v) { return String(v).normalize('NFKC').replace(/[^0-9.]/g, ''); };   // 「¥1,650」→ 1650
+  // プライズ・ちゃむりぃのタブは JAN の列が無く「プライズコード」に JAN(4570…)が入っている(2026-11-25)。13桁で最後の数字が合うときだけ JAN として使う
+  function prizeJan(v) {
+    var c = String(v || '').normalize('NFKC').replace(/[^0-9]/g, '');
+    if (!/^[0-9]{13}$/.test(c)) return '';
+    var t = 0; for (var i = 0; i < 12; i++) t += +c[i] * (i % 2 ? 3 : 1);
+    return (10 - t % 10) % 10 === +c[12] ? c : '';
+  }
   function toProduct(r) {
     var pick = function (k) { return val(r, SRC.f[k]).trim() || val(r, SRC.alt[k]).trim(); };
     var sheet = !val(r, SRC.f.name).trim() && !!val(r, SRC.alt.name).trim();   // スプレッドシート由来の行
-    return { id: +r.$id.value, name: pick('name'), jan: pick('jan').normalize('NFKC').replace(/[^0-9]/g, ''), priceIn: digits(pick('price')), category: val(r, F.cat),
+    return { id: +r.$id.value, name: pick('name'), jan: pick('jan').normalize('NFKC').replace(/[^0-9]/g, '') || prizeJan(pick('prize')), priceIn: digits(pick('price')), category: val(r, F.cat),
              seizo: pick('seizo').normalize('NFKC'), box: digits(pick('box')), carton: /^[0-9,]+$/.test(pick('carton').normalize('NFKC')) ? digits(pick('carton')) : '',
              hanro: pick('hanro') || (sheet ? (pick('tab') === 'カプセル' ? 'カプセル' : '一般') : ''), holder: pick('holder') };   // シート由来で販路が空の行は、進捗表のタブ(シート_進捗タブ)が「カプセル」ならカプセル
   }
